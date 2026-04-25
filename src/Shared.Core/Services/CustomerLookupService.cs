@@ -221,6 +221,7 @@ public class CustomerLookupService : ICustomerLookupService
             };
 
             await _customerRepository.AddAsync(customer);
+            await _customerRepository.SaveChangesAsync();
 
             // Invalidate relevant caches
             await InvalidateCustomerCacheAsync(customer.Id);

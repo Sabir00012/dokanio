@@ -40,8 +40,15 @@ public static class MauiProgram
         builder.Services.AddTransient<LoginViewModel>();
         builder.Services.AddTransient<ProductListViewModel>();
         builder.Services.AddTransient<SaleViewModel>();
+        builder.Services.AddTransient<ComprehensiveMobileSaleViewModel>();
+        builder.Services.AddTransient<EnhancedMobileSaleViewModel>();
+        builder.Services.AddTransient<EnhancedMobileTabContainerViewModel>();
+        builder.Services.AddTransient<MobileSaleTabContainerViewModel>();
+        builder.Services.AddTransient<MobileCustomerLookupViewModel>();
+        builder.Services.AddTransient<MobileBarcodeScannerViewModel>();
         builder.Services.AddTransient<DailySalesViewModel>();
         builder.Services.AddTransient<BarcodeScannerViewModel>();
+        builder.Services.AddTransient<ConfigurationViewModel>();
 
         // Register Views
         builder.Services.AddTransient<MainPage>();
@@ -50,6 +57,7 @@ public static class MauiProgram
         builder.Services.AddTransient<SalePage>();
         builder.Services.AddTransient<DailySalesPage>();
         builder.Services.AddTransient<BarcodeScannerPage>();
+        builder.Services.AddTransient<ConfigurationPage>();
 
 #if DEBUG
         builder.Logging.AddDebug();
