@@ -18,6 +18,7 @@ public partial class SaleViewModel : BaseViewModel
     private readonly IMultiTabSalesManager? _salesManager;
     private readonly ICustomerLookupService? _customerLookupService;
     private readonly IRealTimeCalculationEngine? _calculationEngine;
+    private readonly IStockValidationService? _stockValidationService;
     private readonly ILogger<SaleViewModel>? _logger;
     private readonly Guid _sessionId;
     private readonly Guid _shopId;
@@ -148,6 +149,7 @@ public partial class SaleViewModel : BaseViewModel
         IMultiTabSalesManager? salesManager = null,
         ICustomerLookupService? customerLookupService = null,
         IRealTimeCalculationEngine? calculationEngine = null,
+        IStockValidationService? stockValidationService = null,
         ILogger<SaleViewModel>? logger = null,
         Guid? sessionId = null,
         Guid? shopId = null,
@@ -157,6 +159,7 @@ public partial class SaleViewModel : BaseViewModel
         _salesManager = salesManager;
         _customerLookupService = customerLookupService;
         _calculationEngine = calculationEngine;
+        _stockValidationService = stockValidationService;
         _logger = logger;
         _sessionId = sessionId ?? Guid.NewGuid();
         _shopId = shopId ?? Guid.NewGuid();
@@ -278,8 +281,8 @@ public partial class SaleViewModel : BaseViewModel
     
         if (e.Product != null)
         {
-            // Convert to desktop model and add to sale
-            var desktopProduct = ConvertToDesktopProduct(e.Product);
+            // Convert to desktop model with real-time stock level (Requirement 7.6)
+            var desktopProduct = await ConvertToDesktopProductWithStockAsync(e.Product);
             await AddProduct(desktopProduct);
         }
     }
@@ -300,7 +303,49 @@ public partial class SaleViewModel : BaseViewModel
             Barcode = coreProduct.Barcode,
             UnitPrice = coreProduct.UnitPrice,
             Category = coreProduct.Category,
-            StockQuantity = 100, // This would come from stock service
+            StockQuantity = 0, // Will be populated asynchronously via ConvertToDesktopProductWithStockAsync
+            BatchNumber = coreProduct.BatchNumber,
+            ExpiryDate = coreProduct.ExpiryDate
+        };
+    }
+
+    /// <summary>
+    /// Gets the real-time stock level for a product from the stock validation service.
+    /// Requirement 7.6: Provide real-time stock level information to the sales interface.
+    /// </summary>
+    public async Task<int> GetRealTimeStockLevelAsync(Guid productId, Guid? shopId = null)
+    {
+        if (_stockValidationService == null)
+            return 0;
+
+        try
+        {
+            var stockLevel = await _stockValidationService.GetCurrentStockLevelAsync(productId, shopId);
+            return stockLevel.AvailableQuantity;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error getting real-time stock level for product {ProductId}", productId);
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Converts a core product to a desktop model with real-time stock level populated.
+    /// Requirement 7.6: Provide real-time stock level information to the sales interface.
+    /// </summary>
+    private async Task<Desktop.Models.Product> ConvertToDesktopProductWithStockAsync(Shared.Core.Entities.Product coreProduct)
+    {
+        var stockQuantity = await GetRealTimeStockLevelAsync(coreProduct.Id, _shopId != Guid.Empty ? _shopId : null);
+
+        return new Desktop.Models.Product
+        {
+            Id = coreProduct.Id,
+            Name = coreProduct.Name,
+            Barcode = coreProduct.Barcode,
+            UnitPrice = coreProduct.UnitPrice,
+            Category = coreProduct.Category,
+            StockQuantity = stockQuantity,
             BatchNumber = coreProduct.BatchNumber,
             ExpiryDate = coreProduct.ExpiryDate
         };
@@ -1102,7 +1147,7 @@ public partial class SaleViewModel : BaseViewModel
                 
                 if (result.IsProductFound && result.Product != null)
                 {
-                    var desktopProduct = ConvertToDesktopProduct(result.Product);
+                    var desktopProduct = await ConvertToDesktopProductWithStockAsync(result.Product);
                     await AddProduct(desktopProduct);
                     ScanStatus = "Product added";
                 }
@@ -1156,7 +1201,7 @@ public partial class SaleViewModel : BaseViewModel
                 
                 if (product != null)
                 {
-                    var desktopProduct = ConvertToDesktopProduct(product);
+                    var desktopProduct = await ConvertToDesktopProductWithStockAsync(product);
                     await AddProduct(desktopProduct);
                     LastScannedBarcode = barcode;
                     LastScanTime = DateTime.Now;

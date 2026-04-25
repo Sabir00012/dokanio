@@ -40,6 +40,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IWeightBasedPricingService, WeightBasedPricingService>();
         services.AddScoped<IDiscountService, DiscountService>();
+        services.AddScoped<IDiscountProcessingEngine, DiscountProcessingEngine>();
         services.AddScoped<IMembershipService, MembershipService>();
         services.AddScoped<IRealTimeCalculationEngine, RealTimeCalculationEngine>();
         services.AddScoped<ICustomerLookupService, CustomerLookupService>();
@@ -50,6 +51,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IIntegratedPosService, IntegratedPosService>();
         services.AddScoped<IApplicationStartupService, ApplicationStartupService>();
         services.AddScoped<IBusinessManagementService, BusinessManagementService>();
+        services.AddScoped<IStockValidationService, StockValidationService>();
+        services.AddScoped<IPaymentProcessingService, PaymentProcessingService>();
+        services.AddScoped<IInventoryUpdater, InventoryUpdater>();
         
         // Register device context service
         services.AddSingleton<IDeviceContextService, DeviceContextService>();
@@ -230,6 +234,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IWeightBasedPricingService, WeightBasedPricingService>();
         services.AddScoped<IDiscountService, DiscountService>();
+        services.AddScoped<IDiscountProcessingEngine, DiscountProcessingEngine>();
         services.AddScoped<IMembershipService, MembershipService>();
         services.AddScoped<IRealTimeCalculationEngine, RealTimeCalculationEngine>();
         services.AddScoped<ICustomerLookupService, CustomerLookupService>();
@@ -263,6 +268,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IApplicationStartupService, ApplicationStartupService>();
         services.AddScoped<IDatabaseMigrationService, DatabaseMigrationService>();
         services.AddScoped<IBusinessManagementService, BusinessManagementService>();
+        services.AddScoped<IStockValidationService, StockValidationService>();
+        services.AddScoped<IPaymentProcessingService, PaymentProcessingService>();
+        services.AddScoped<IInventoryUpdater, InventoryUpdater>();
         
         // Register system integration service for testing
         services.AddScoped<ISystemIntegrationService, SystemIntegrationService>();

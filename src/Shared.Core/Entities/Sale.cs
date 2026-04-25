@@ -37,6 +37,27 @@ public class Sale : ISoftDeletable
     
     public PaymentMethod PaymentMethod { get; set; }
     
+    /// <summary>
+    /// Current lifecycle status of the sale transaction
+    /// </summary>
+    public SaleStatus Status { get; set; } = SaleStatus.Draft;
+    
+    /// <summary>
+    /// Timestamp when the sale was completed (payment received)
+    /// </summary>
+    public DateTime? CompletedAt { get; set; }
+    
+    /// <summary>
+    /// Timestamp when the sale was cancelled
+    /// </summary>
+    public DateTime? CancelledAt { get; set; }
+    
+    /// <summary>
+    /// Reason provided when the sale was cancelled
+    /// </summary>
+    [MaxLength(500)]
+    public string? CancellationReason { get; set; }
+    
     // Customer and membership
     public Guid? CustomerId { get; set; }
     public virtual Customer? Customer { get; set; }

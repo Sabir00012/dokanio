@@ -285,9 +285,21 @@ public class ShopConfiguration
     public string Currency { get; set; } = "USD";
     
     /// <summary>
-    /// Tax rate for this shop (overrides business default)
+    /// Default tax rate for this shop (overrides business default).
+    /// Applied to items whose category has no specific rate in CategoryTaxRates.
     /// </summary>
     public decimal TaxRate { get; set; } = 0.0m;
+    
+    /// <summary>
+    /// Category-specific tax rates. Key is the product category name, value is the tax rate (e.g. 0.08 for 8%).
+    /// When a product's category matches a key here, that rate is used instead of the default TaxRate.
+    /// </summary>
+    public Dictionary<string, decimal> CategoryTaxRates { get; set; } = new();
+    
+    /// <summary>
+    /// Whether tax is already included in the product price (tax-inclusive pricing).
+    /// </summary>
+    public bool TaxIncludedInPrice { get; set; } = false;
     
     /// <summary>
     /// Pricing rules specific to this shop
@@ -313,6 +325,20 @@ public class ShopConfiguration
     /// Custom settings for this shop
     /// </summary>
     public Dictionary<string, object> CustomSettings { get; set; } = new();
+    
+    /// <summary>
+    /// Gets the effective tax rate for a given product category.
+    /// Returns the category-specific rate if available, otherwise the default TaxRate.
+    /// </summary>
+    public decimal GetTaxRateForCategory(string? category)
+    {
+        if (!string.IsNullOrWhiteSpace(category) && 
+            CategoryTaxRates.TryGetValue(category, out var categoryRate))
+        {
+            return categoryRate;
+        }
+        return TaxRate;
+    }
 }
 
 /// <summary>

@@ -238,10 +238,12 @@ public class PosDbContext : DbContext
             entity.Property(e => e.DiscountAmount).HasPrecision(10, 2);
             entity.Property(e => e.TaxAmount).HasPrecision(10, 2);
             entity.Property(e => e.MembershipDiscountAmount).HasPrecision(10, 2);
+            entity.Property(e => e.CancellationReason).HasMaxLength(500);
             
             // Convert enums to integers for SQLite
             entity.Property(e => e.PaymentMethod).HasConversion<int>();
             entity.Property(e => e.SyncStatus).HasConversion<int>();
+            entity.Property(e => e.Status).HasConversion<int>();
             
             // Foreign key relationship with Shop
             entity.HasOne(e => e.Shop)

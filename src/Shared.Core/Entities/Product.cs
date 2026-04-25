@@ -64,6 +64,18 @@ public class Product : ISoftDeletable
     [Range(0, 6)]
     public int WeightPrecision { get; set; } = 3; // Decimal places for weight (default 3 for grams precision)
     
+    /// <summary>
+    /// Minimum allowed weight in kilograms for this product. Null means no minimum constraint.
+    /// </summary>
+    [Range(0, double.MaxValue)]
+    public decimal? MinWeightKg { get; set; }
+    
+    /// <summary>
+    /// Maximum allowed weight in kilograms for this product. Null means no maximum constraint.
+    /// </summary>
+    [Range(0, double.MaxValue)]
+    public decimal? MaxWeightKg { get; set; }
+    
     // Soft delete properties
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }

@@ -15,7 +15,6 @@ namespace Shared.Core.Services;
 public class EnhancedSalesService : SaleService, IEnhancedSalesService
 {
     private readonly IBusinessManagementService _businessManagementService;
-    private readonly IShopRepository _shopRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<EnhancedSalesService> _logger;
 
@@ -29,6 +28,8 @@ public class EnhancedSalesService : SaleService, IEnhancedSalesService
         IDiscountService discountService,
         IConfigurationService configurationService,
         ILicenseService licenseService,
+        IUserRepository userRepository,
+        IAuthorizationService authorizationService,
         IBusinessManagementService businessManagementService,
         IShopRepository shopRepository,
         ICurrentUserService currentUserService,
@@ -36,10 +37,9 @@ public class EnhancedSalesService : SaleService, IEnhancedSalesService
         ILogger<EnhancedSalesService> logger)
         : base(saleRepository, saleItemRepository, productService, inventoryService, 
                weightBasedPricingService, membershipService, discountService, 
-               configurationService, licenseService, context, logger)
+               configurationService, licenseService, userRepository, authorizationService, shopRepository, context, logger)
     {
         _businessManagementService = businessManagementService;
-        _shopRepository = shopRepository;
         _currentUserService = currentUserService;
         _logger = logger;
     }
@@ -527,16 +527,12 @@ public class EnhancedSalesService : SaleService, IEnhancedSalesService
     // Helper methods to access base class protected members
     private ISaleRepository GetSaleRepository()
     {
-        return (ISaleRepository)GetType().BaseType!
-            .GetField("_saleRepository", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .GetValue(this)!;
+        return _saleRepository;
     }
 
     private IProductService GetProductService()
     {
-        return (IProductService)GetType().BaseType!
-            .GetField("_productService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .GetValue(this)!;
+        return _productService;
     }
 
     #endregion
