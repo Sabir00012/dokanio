@@ -349,6 +349,290 @@ public class RealTimeCalculationEngineTests : IDisposable
         _output.WriteLine($"Recalculation result: Subtotal {result.Subtotal:C}, Total {result.FinalTotal:C}");
     }
 
+    [Fact]
+    public async Task CalculateTaxesAsync_WithCategoryBasedTaxRates_ShouldApplyCorrectRates()
+    {
+        // Arrange - two items in different categories with different tax rates
+        var foodItem = new SaleItem
+        {
+            Id = Guid.NewGuid(),
+            Quantity = 1,
+            UnitPrice = 10.00m,
+            TotalPrice = 10.00m,
+            Product = new Product { Name = "Apple", Category = "Food", UnitPrice = 10.00m }
+        };
+
+        var electronicsItem = new SaleItem
+        {
+            Id = Guid.NewGuid(),
+            Quantity = 1,
+            UnitPrice = 100.00m,
+            TotalPrice = 100.00m,
+            Product = new Product { Name = "Headphones", Category = "Electronics", UnitPrice = 100.00m }
+        };
+
+        var items = new List<SaleItem> { foodItem, electronicsItem };
+
+        var shopConfig = new ShopConfiguration
+        {
+            TaxRate = 0.05m, // Default 5% tax
+            CategoryTaxRates = new Dictionary<string, decimal>
+            {
+                { "Food", 0.00m },         // Food is tax-exempt
+                { "Electronics", 0.10m }   // Electronics taxed at 10%
+            }
+        };
+
+        // Act
+        var result = await _calculationEngine.CalculateTaxesAsync(items, shopConfig);
+
+        // Assert
+        Assert.NotNull(result);
+        // Food: 0% tax = $0.00
+        // Electronics: 10% of $100 = $10.00
+        Assert.Equal(10.00m, result.TotalTaxAmount);
+        // Only one tax group (Electronics) since Food is 0%
+        Assert.Single(result.AppliedTaxes);
+        Assert.Equal("Electronics Tax", result.AppliedTaxes[0].TaxName);
+        Assert.Equal(0.10m, result.AppliedTaxes[0].TaxRate);
+        Assert.Equal(100.00m, result.AppliedTaxes[0].TaxableAmount);
+        Assert.Equal(10.00m, result.AppliedTaxes[0].TaxAmount);
+
+        _output.WriteLine($"Category tax: Food=$0.00 (exempt), Electronics=$10.00 (10%), Total={result.TotalTaxAmount:C}");
+    }
+
+    [Fact]
+    public async Task CalculateTaxesAsync_WithDefaultRateForUncategorizedItems_ShouldApplyDefaultRate()
+    {
+        // Arrange - item with no category should use default tax rate
+        var items = new List<SaleItem>
+        {
+            new SaleItem
+            {
+                Id = Guid.NewGuid(),
+                Quantity = 1,
+                UnitPrice = 50.00m,
+                TotalPrice = 50.00m,
+                Product = new Product { Name = "Misc Item", Category = null, UnitPrice = 50.00m }
+            }
+        };
+
+        var shopConfig = new ShopConfiguration
+        {
+            TaxRate = 0.08m, // Default 8% tax
+            CategoryTaxRates = new Dictionary<string, decimal>
+            {
+                { "Food", 0.00m } // Only Food is configured; other categories use default
+            }
+        };
+
+        // Act
+        var result = await _calculationEngine.CalculateTaxesAsync(items, shopConfig);
+
+        // Assert
+        Assert.NotNull(result);
+        // Uncategorized item: 8% of $50 = $4.00
+        Assert.Equal(4.00m, result.TotalTaxAmount);
+        Assert.Single(result.AppliedTaxes);
+        Assert.Equal("Sales Tax", result.AppliedTaxes[0].TaxName);
+        Assert.Equal(0.08m, result.AppliedTaxes[0].TaxRate);
+
+        _output.WriteLine($"Default rate tax: {result.TotalTaxAmount:C} on uncategorized item");
+    }
+
+    [Fact]
+    public async Task CalculateTaxesAsync_WithTaxIncludedInPrice_ShouldReturnZeroTax()
+    {
+        // Arrange - tax-inclusive pricing means no additional tax
+        var items = new List<SaleItem>
+        {
+            new SaleItem
+            {
+                Id = Guid.NewGuid(),
+                Quantity = 2,
+                UnitPrice = 10.00m,
+                TotalPrice = 20.00m
+            }
+        };
+
+        var shopConfig = new ShopConfiguration
+        {
+            TaxRate = 0.10m,
+            TaxIncludedInPrice = true // Tax already in price
+        };
+
+        // Act
+        var result = await _calculationEngine.CalculateTaxesAsync(items, shopConfig);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(0m, result.TotalTaxAmount);
+        Assert.Empty(result.AppliedTaxes);
+        Assert.True(result.TaxIncludedInPrice);
+
+        _output.WriteLine("Tax-inclusive pricing: no additional tax calculated");
+    }
+
+    [Fact]
+    public async Task CalculateOrderTotalsAsync_WithCategoryTaxRates_ShouldProduceCorrectBreakdown()
+    {
+        // Arrange - mixed categories with different tax rates
+        var foodProduct = new Product
+        {
+            Id = Guid.NewGuid(),
+            Name = "Bread",
+            Category = "Food",
+            UnitPrice = 3.00m,
+            IsWeightBased = false
+        };
+
+        var beverageProduct = new Product
+        {
+            Id = Guid.NewGuid(),
+            Name = "Soda",
+            Category = "Beverages",
+            UnitPrice = 2.00m,
+            IsWeightBased = false
+        };
+
+        var items = new List<SaleItem>
+        {
+            new SaleItem
+            {
+                Id = Guid.NewGuid(),
+                ProductId = foodProduct.Id,
+                Product = foodProduct,
+                Quantity = 2,
+                UnitPrice = 3.00m,
+                TotalPrice = 6.00m
+            },
+            new SaleItem
+            {
+                Id = Guid.NewGuid(),
+                ProductId = beverageProduct.Id,
+                Product = beverageProduct,
+                Quantity = 3,
+                UnitPrice = 2.00m,
+                TotalPrice = 6.00m
+            }
+        };
+
+        var shopConfig = new ShopConfiguration
+        {
+            Currency = "USD",
+            TaxRate = 0.05m, // Default 5%
+            CategoryTaxRates = new Dictionary<string, decimal>
+            {
+                { "Food", 0.00m },      // Food exempt
+                { "Beverages", 0.08m }  // Beverages at 8%
+            }
+        };
+
+        // Act
+        var result = await _calculationEngine.CalculateOrderTotalsAsync(items, shopConfig);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(12.00m, result.Subtotal); // 6 + 6
+        // Food: 0% tax = $0.00
+        // Beverages: 8% of $6 = $0.48
+        Assert.Equal(0.48m, result.TotalTaxAmount);
+        Assert.Equal(12.48m, result.FinalTotal); // 12 + 0.48
+        Assert.True(result.IsValid);
+
+        // Verify breakdown is populated
+        Assert.NotNull(result.Breakdown);
+        Assert.NotEmpty(result.Breakdown.Items);
+        Assert.NotEmpty(result.Breakdown.CalculationSteps);
+        Assert.True(result.Breakdown.Totals.ContainsKey("Subtotal"));
+        Assert.True(result.Breakdown.Totals.ContainsKey("Tax"));
+        Assert.True(result.Breakdown.Totals.ContainsKey("Final"));
+
+        _output.WriteLine($"Mixed category order: Subtotal={result.Subtotal:C}, Tax={result.TotalTaxAmount:C}, Total={result.FinalTotal:C}");
+        _output.WriteLine($"Breakdown steps: {string.Join(" | ", result.Breakdown.CalculationSteps)}");
+    }
+
+    [Fact]
+    public async Task CalculateOrderTotalsAsync_WithMultipleTaxCategories_ShouldGroupByCategory()
+    {
+        // Arrange - three different categories
+        var items = new List<SaleItem>
+        {
+            new SaleItem
+            {
+                Id = Guid.NewGuid(),
+                Quantity = 1,
+                UnitPrice = 100.00m,
+                TotalPrice = 100.00m,
+                Product = new Product { Name = "Laptop", Category = "Electronics", UnitPrice = 100.00m }
+            },
+            new SaleItem
+            {
+                Id = Guid.NewGuid(),
+                Quantity = 1,
+                UnitPrice = 50.00m,
+                TotalPrice = 50.00m,
+                Product = new Product { Name = "Shirt", Category = "Clothing", UnitPrice = 50.00m }
+            },
+            new SaleItem
+            {
+                Id = Guid.NewGuid(),
+                Quantity = 1,
+                UnitPrice = 20.00m,
+                TotalPrice = 20.00m,
+                Product = new Product { Name = "Apple", Category = "Food", UnitPrice = 20.00m }
+            }
+        };
+
+        var shopConfig = new ShopConfiguration
+        {
+            TaxRate = 0.05m,
+            CategoryTaxRates = new Dictionary<string, decimal>
+            {
+                { "Electronics", 0.10m }, // 10%
+                { "Clothing", 0.07m },    // 7%
+                { "Food", 0.00m }         // Exempt
+            }
+        };
+
+        // Act
+        var taxResult = await _calculationEngine.CalculateTaxesAsync(items, shopConfig);
+
+        // Assert
+        // Electronics: 10% of $100 = $10.00
+        // Clothing: 7% of $50 = $3.50
+        // Food: 0% = $0.00
+        Assert.Equal(13.50m, taxResult.TotalTaxAmount);
+        Assert.Equal(2, taxResult.AppliedTaxes.Count); // Electronics + Clothing (Food is 0%)
+        Assert.Equal(2, taxResult.TaxBreakdowns.Count);
+
+        _output.WriteLine($"Multi-category tax: Electronics=$10.00, Clothing=$3.50, Food=$0.00, Total={taxResult.TotalTaxAmount:C}");
+    }
+
+    [Fact]
+    public async Task ShopConfiguration_GetTaxRateForCategory_ShouldReturnCorrectRate()
+    {
+        // Arrange
+        var shopConfig = new ShopConfiguration
+        {
+            TaxRate = 0.05m, // Default
+            CategoryTaxRates = new Dictionary<string, decimal>
+            {
+                { "Food", 0.00m },
+                { "Electronics", 0.10m }
+            }
+        };
+
+        // Act & Assert
+        Assert.Equal(0.00m, shopConfig.GetTaxRateForCategory("Food"));
+        Assert.Equal(0.10m, shopConfig.GetTaxRateForCategory("Electronics"));
+        Assert.Equal(0.05m, shopConfig.GetTaxRateForCategory("Clothing")); // Falls back to default
+        Assert.Equal(0.05m, shopConfig.GetTaxRateForCategory(null));       // Null falls back to default
+        Assert.Equal(0.05m, shopConfig.GetTaxRateForCategory(""));         // Empty falls back to default
+
+        _output.WriteLine("Category tax rate lookup verified");
+    }
+
     public void Dispose()
     {
         _serviceProvider?.Dispose();
