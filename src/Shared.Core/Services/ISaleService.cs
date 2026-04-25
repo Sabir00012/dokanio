@@ -6,25 +6,40 @@ namespace Shared.Core.Services;
 
 public interface ISaleService
 {
+    // Sale Management
     Task<Sale> CreateSaleAsync(string invoiceNumber, Guid deviceId);
+    Task<Sale> CreateSaleAsync(Guid deviceId, Guid userId, Guid? customerId = null);
     Task<Sale> CreateSaleWithCustomerAsync(string invoiceNumber, Guid deviceId, string? membershipNumber = null);
+    Task<Sale?> GetSaleByIdAsync(Guid saleId);
+    Task<Sale?> GetSaleByInvoiceNumberAsync(string invoiceNumber);
+
+    // Item Management
     Task<Sale> AddItemToSaleAsync(Guid saleId, Guid productId, int quantity, decimal unitPrice, string? batchNumber = null);
     Task<Sale> AddWeightBasedItemToSaleAsync(Guid saleId, Guid productId, decimal weight, string? batchNumber = null);
-    Task<Sale> CompleteSaleAsync(Guid saleId, PaymentMethod paymentMethod);
-    Task<Sale> CompleteSaleAsync(Sale sale);
-    Task<Sale> CompleteSaleAsync(Sale sale, PaymentMethod paymentMethod);
+
+    // Calculation and Completion
     Task<decimal> CalculateSaleTotalAsync(Guid saleId);
     Task<decimal> CalculateSaleTotalAsync(IEnumerable<SaleItem> saleItems);
     Task<SaleCalculationResult> CalculateFullSaleTotalAsync(Guid saleId);
     Task<SaleCalculationResult> CalculateFullSaleTotalAsync(Sale sale);
+    Task<Sale> CompleteSaleAsync(Guid saleId, PaymentMethod paymentMethod);
+    Task<Sale> CompleteSaleAsync(Sale sale);
+    Task<Sale> CompleteSaleAsync(Sale sale, PaymentMethod paymentMethod);
+    Task<Sale> CancelSaleAsync(Guid saleId, string reason);
+
+    // Validation
     Task<bool> ValidateProductForSaleAsync(Guid productId);
-    
-    // Additional methods for desktop application
-    Task<Sale?> GetSaleByInvoiceNumberAsync(string invoiceNumber);
+    Task<bool> ValidateDeviceAsync(Guid deviceId);
+    Task<bool> ValidateUserPermissionsAsync(Guid userId);
+
+    // Queries
     Task<decimal> GetDailySalesAsync(DateTime date);
     Task<int> GetDailyTransactionCountAsync(DateTime date);
     Task<IEnumerable<Sale>> GetSalesByDateRangeAsync(DateTime fromDate, DateTime toDate);
-    
+
+    // Invoice number generation
+    string GenerateInvoiceNumber();
+
     // Refund support
     Task<RefundRecord?> GetRefundBySaleIdAsync(Guid saleId);
     Task ProcessRefundAsync(RefundRecord refund);

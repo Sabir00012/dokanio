@@ -77,6 +77,13 @@ public class AdvancedFeaturesIntegrationTests : IDisposable
         // Add missing ISaleItemRepository
         services.AddScoped<ISaleItemRepository, SaleItemRepository>();
         
+        // Add user repository and authorization service required by SaleService
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IAuthorizationService, AuthorizationService>();
+        
+        // Add device context service required by DiscountService
+        services.AddSingleton<IDeviceContextService, DeviceContextService>();
+        
         // Add mock current user service for testing
         services.AddSingleton<ICurrentUserService>(provider => 
         {
