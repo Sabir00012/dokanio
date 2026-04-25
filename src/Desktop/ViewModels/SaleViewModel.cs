@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Desktop.Models;
 using Desktop.Views;
+using Shared.Core.Repositories;
 using Shared.Core.Services;
 using Shared.Core.Entities;
 using Shared.Core.DTOs;
@@ -19,6 +20,9 @@ public partial class SaleViewModel : BaseViewModel
     private readonly ICustomerLookupService? _customerLookupService;
     private readonly IRealTimeCalculationEngine? _calculationEngine;
     private readonly IStockValidationService? _stockValidationService;
+    private readonly ISaleService? _saleService;
+    private readonly IReceiptService? _receiptService;
+    private readonly IProductRepository? _productRepository;
     private readonly ILogger<SaleViewModel>? _logger;
     private readonly Guid _sessionId;
     private readonly Guid _shopId;
@@ -150,6 +154,9 @@ public partial class SaleViewModel : BaseViewModel
         ICustomerLookupService? customerLookupService = null,
         IRealTimeCalculationEngine? calculationEngine = null,
         IStockValidationService? stockValidationService = null,
+        ISaleService? saleService = null,
+        IReceiptService? receiptService = null,
+        IProductRepository? productRepository = null,
         ILogger<SaleViewModel>? logger = null,
         Guid? sessionId = null,
         Guid? shopId = null,
@@ -160,6 +167,9 @@ public partial class SaleViewModel : BaseViewModel
         _customerLookupService = customerLookupService;
         _calculationEngine = calculationEngine;
         _stockValidationService = stockValidationService;
+        _saleService = saleService;
+        _receiptService = receiptService;
+        _productRepository = productRepository;
         _logger = logger;
         _sessionId = sessionId ?? Guid.NewGuid();
         _shopId = shopId ?? Guid.NewGuid();
@@ -355,21 +365,62 @@ public partial class SaleViewModel : BaseViewModel
     private void SearchProducts(string? searchTerm = null)
     {
         searchTerm ??= SearchText;
-        
+
         SearchResults.Clear();
-        
+
         if (string.IsNullOrWhiteSpace(searchTerm))
             return;
 
-        // Sample search logic - in real app this would query a database
-        var sampleProducts = GetSampleProducts()
-            .Where(p => p.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                       (p.Barcode?.Contains(searchTerm) == true))
-            .Take(5);
-
-        foreach (var product in sampleProducts)
+        if (_productRepository != null)
         {
-            SearchResults.Add(product);
+            // Async search via repository — fire-and-forget with UI marshal
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var results = await _productRepository.SearchAsync(searchTerm);
+                    var desktopProducts = new List<Desktop.Models.Product>();
+                    foreach (var p in results.Take(10))
+                    {
+                        var stockQty = await GetRealTimeStockLevelAsync(p.Id, _shopId != Guid.Empty ? _shopId : null);
+                        desktopProducts.Add(new Desktop.Models.Product
+                        {
+                            Id = p.Id,
+                            Name = p.Name,
+                            Barcode = p.Barcode,
+                            UnitPrice = p.UnitPrice,
+                            Category = p.Category,
+                            StockQuantity = stockQty,
+                            BatchNumber = p.BatchNumber,
+                            ExpiryDate = p.ExpiryDate
+                        });
+                    }
+
+                    var sync = SynchronizationContext.Current;
+                    if (sync != null)
+                        sync.Post(_ => { SearchResults.Clear(); foreach (var p in desktopProducts) SearchResults.Add(p); }, null);
+                    else
+                    {
+                        SearchResults.Clear();
+                        foreach (var p in desktopProducts) SearchResults.Add(p);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Error searching products");
+                }
+            });
+        }
+        else
+        {
+            // Fallback to sample data when no repository is available
+            var sampleProducts = GetSampleProducts()
+                .Where(p => p.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                           (p.Barcode?.Contains(searchTerm) == true))
+                .Take(5);
+
+            foreach (var product in sampleProducts)
+                SearchResults.Add(product);
         }
     }
 
@@ -503,30 +554,51 @@ public partial class SaleViewModel : BaseViewModel
             // Complete session if multi-tab manager is available
             if (_salesManager != null)
             {
-                var result = await _salesManager.CompleteSessionAsync(_sessionId, 
+                var result = await _salesManager.CompleteSessionAsync(_sessionId,
                     (Shared.Core.Enums.PaymentMethod)SelectedPaymentMethod);
-                
+
                 if (!result.Success)
                 {
                     SetError($"Failed to complete sale: {result.Message}");
                     return;
                 }
             }
-            
-            // Simulate sale processing
-            await Task.Delay(1000);
 
-            var sale = new Desktop.Models.Sale
+            // Persist the sale via ISaleService
+            string invoiceNumber;
+            if (_saleService != null)
             {
-                Id = Guid.NewGuid(),
-                InvoiceNumber = $"INV-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
-                TotalAmount = Total,
-                PaymentMethod = SelectedPaymentMethod,
-                CustomerName = CustomerName,
-                CustomerPhone = CustomerPhone,
-                CreatedAt = DateTime.Now,
-                Items = SaleItems.ToList()
-            };
+                // Build the sale using the existing ISaleService API
+                var sale = await _saleService.CreateSaleAsync(_shopId, _userId, _currentCustomer?.Id);
+
+                foreach (var item in SaleItems)
+                {
+                    await _saleService.AddItemToSaleAsync(
+                        sale.Id, item.ProductId, item.Quantity, item.UnitPrice, item.BatchNumber);
+                }
+
+                var completedSale = await _saleService.CompleteSaleAsync(
+                    sale.Id, (Shared.Core.Enums.PaymentMethod)SelectedPaymentMethod);
+
+                invoiceNumber = completedSale.InvoiceNumber;
+
+                // Print receipt if service is available
+                if (_receiptService != null)
+                {
+                    try
+                    {
+                        await _receiptService.GenerateReceiptAsync(completedSale);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Receipt generation failed but sale was saved");
+                    }
+                }
+            }
+            else
+            {
+                invoiceNumber = $"INV-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
+            }
 
             // Update customer after purchase if available (fire-and-forget)
             if (_currentCustomer != null && _customerLookupService != null)
@@ -543,14 +615,12 @@ public partial class SaleViewModel : BaseViewModel
                     }
                 });
             }
-            
+
             // Reset the form
             await ResetSale();
-            
-            // Show success message (in real app, might show receipt dialog)
-            ErrorMessage = $"Sale completed successfully! Invoice: {sale.InvoiceNumber}";
-            
-            _logger?.LogInformation("Sale completed successfully: {InvoiceNumber}", sale.InvoiceNumber);
+
+            ErrorMessage = $"Sale completed! Invoice: {invoiceNumber}";
+            _logger?.LogInformation("Sale completed: {InvoiceNumber}", invoiceNumber);
         }
         catch (Exception ex)
         {

@@ -54,6 +54,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStockValidationService, StockValidationService>();
         services.AddScoped<IPaymentProcessingService, PaymentProcessingService>();
         services.AddScoped<IInventoryUpdater, InventoryUpdater>();
+        services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IReportService, ReportService>();
         
         // Register device context service
         services.AddSingleton<IDeviceContextService, DeviceContextService>();
@@ -82,6 +84,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILicenseRepository, LicenseRepository>();
         services.AddScoped<IBusinessRepository, BusinessRepository>();
         services.AddScoped<IShopRepository, ShopRepository>();
+        services.AddScoped<ISupplierRepository, SupplierRepository>();
         
         // Register transaction logging service for offline-first persistence
         services.AddScoped<ITransactionLogService, TransactionLogService>();
@@ -258,6 +261,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILicenseRepository, LicenseRepository>();
         services.AddScoped<IBusinessRepository, BusinessRepository>();
         services.AddScoped<IShopRepository, ShopRepository>();
+        services.AddScoped<ISupplierRepository, SupplierRepository>();
 
         // Register additional services for testing
         services.AddScoped<IDiscountManagementService, DiscountManagementService>();
@@ -271,6 +275,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStockValidationService, StockValidationService>();
         services.AddScoped<IPaymentProcessingService, PaymentProcessingService>();
         services.AddScoped<IInventoryUpdater, InventoryUpdater>();
+        services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IReportService, ReportService>();
         
         // Register system integration service for testing
         services.AddScoped<ISystemIntegrationService, SystemIntegrationService>();

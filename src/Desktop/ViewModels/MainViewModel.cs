@@ -130,12 +130,12 @@ public partial class MainViewModel : BaseViewModel
         
         Title = "Multi-Business POS Desktop";
         
-        // Create enhanced SaleViewModel with null services for design-time
+        // Create ViewModels with null services for design-time
         SaleViewModel = new SaleViewModel();
-        SupplierViewModel = new SupplierViewModel();
-        PurchaseViewModel = new PurchaseViewModel();
-        ProductViewModel = new ProductViewModel();
-        ReportsViewModel = new ReportsViewModel();
+        SupplierViewModel = new SupplierViewModel(null!, null!);
+        PurchaseViewModel = new PurchaseViewModel(null!, null!, null!, null!, null!);
+        ProductViewModel = new ProductViewModel(null!, null!, null!);
+        ReportsViewModel = new ReportsViewModel(null!, null!, null!, null!, null!, null!);
         BusinessManagementViewModel = new BusinessManagementViewModel(null!, null!, null!);
         UserManagementViewModel = new UserManagementViewModel(null!, null!, null!, null!);
         AdvancedReportsViewModel = new AdvancedReportsViewModel(null!, null!, null!, null!);

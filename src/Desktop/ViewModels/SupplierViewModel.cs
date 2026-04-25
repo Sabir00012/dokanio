@@ -1,12 +1,18 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Desktop.Models;
+using Microsoft.Extensions.Logging;
+using Shared.Core.Entities;
+using Shared.Core.Enums;
+using Shared.Core.Repositories;
 using System.Collections.ObjectModel;
 
 namespace Desktop.ViewModels;
 
 public partial class SupplierViewModel : BaseViewModel
 {
+    private readonly ISupplierRepository _supplierRepository;
+    private readonly ILogger<SupplierViewModel> _logger;
+
     [ObservableProperty]
     private string searchText = string.Empty;
 
@@ -34,16 +40,50 @@ public partial class SupplierViewModel : BaseViewModel
     public ObservableCollection<Supplier> Suppliers { get; } = new();
     public ObservableCollection<Supplier> FilteredSuppliers { get; } = new();
 
+    // Design-time constructor
     public SupplierViewModel()
     {
         Title = "Supplier Management";
-        LoadSampleSuppliers();
-        RefreshFilteredSuppliers();
+    }
+
+    public SupplierViewModel(
+        ISupplierRepository supplierRepository,
+        ILogger<SupplierViewModel> logger)
+    {
+        _supplierRepository = supplierRepository;
+        _logger = logger;
+        Title = "Supplier Management";
+        _ = Task.Run(LoadSuppliersAsync);
     }
 
     partial void OnSearchTextChanged(string value)
     {
         RefreshFilteredSuppliers();
+    }
+
+    [RelayCommand]
+    private async Task LoadSuppliersAsync()
+    {
+        IsBusy = true;
+        ClearError();
+        try
+        {
+            var suppliers = await _supplierRepository.GetActiveSuppliersAsync();
+            Suppliers.Clear();
+            foreach (var s in suppliers)
+                Suppliers.Add(s);
+
+            RefreshFilteredSuppliers();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading suppliers");
+            SetError($"Error loading suppliers: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     [RelayCommand]
@@ -58,7 +98,7 @@ public partial class SupplierViewModel : BaseViewModel
     {
         SelectedSupplier = supplier;
         IsAddingSupplier = true;
-        
+
         SupplierName = supplier.Name;
         ContactPerson = supplier.ContactPerson ?? string.Empty;
         Phone = supplier.Phone ?? string.Empty;
@@ -71,30 +111,32 @@ public partial class SupplierViewModel : BaseViewModel
     {
         if (string.IsNullOrWhiteSpace(SupplierName))
         {
-            ErrorMessage = "Supplier name is required";
+            SetError("Supplier name is required");
             return;
         }
 
         IsBusy = true;
-        ErrorMessage = string.Empty;
+        ClearError();
 
         try
         {
-            await Task.Delay(500); // Simulate saving
-
             if (SelectedSupplier != null)
             {
-                // Update existing supplier
                 SelectedSupplier.Name = SupplierName;
                 SelectedSupplier.ContactPerson = ContactPerson;
                 SelectedSupplier.Phone = Phone;
                 SelectedSupplier.Email = Email;
                 SelectedSupplier.Address = Address;
-                SelectedSupplier.UpdatedAt = DateTime.Now;
+                SelectedSupplier.UpdatedAt = DateTime.UtcNow;
+                SelectedSupplier.SyncStatus = SyncStatus.NotSynced;
+
+                await _supplierRepository.UpdateAsync(SelectedSupplier);
+                await _supplierRepository.SaveChangesAsync();
+
+                _logger.LogInformation("Updated supplier {SupplierName}", SelectedSupplier.Name);
             }
             else
             {
-                // Add new supplier
                 var newSupplier = new Supplier
                 {
                     Id = Guid.NewGuid(),
@@ -104,11 +146,16 @@ public partial class SupplierViewModel : BaseViewModel
                     Email = Email,
                     Address = Address,
                     IsActive = true,
-                    CreatedAt = DateTime.Now,
-                    UpdatedAt = DateTime.Now
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                    SyncStatus = SyncStatus.NotSynced
                 };
 
+                await _supplierRepository.AddAsync(newSupplier);
+                await _supplierRepository.SaveChangesAsync();
+
                 Suppliers.Add(newSupplier);
+                _logger.LogInformation("Created supplier {SupplierName}", newSupplier.Name);
             }
 
             RefreshFilteredSuppliers();
@@ -116,7 +163,8 @@ public partial class SupplierViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Error saving supplier: {ex.Message}";
+            _logger.LogError(ex, "Error saving supplier");
+            SetError($"Error saving supplier: {ex.Message}");
         }
         finally
         {
@@ -136,21 +184,26 @@ public partial class SupplierViewModel : BaseViewModel
     private async Task DeleteSupplier(Supplier supplier)
     {
         IsBusy = true;
-        ErrorMessage = string.Empty;
+        ClearError();
 
         try
         {
-            await Task.Delay(300); // Simulate deletion
-
-            // Soft delete
             supplier.IsActive = false;
-            supplier.UpdatedAt = DateTime.Now;
+            supplier.IsDeleted = true;
+            supplier.DeletedAt = DateTime.UtcNow;
+            supplier.UpdatedAt = DateTime.UtcNow;
+            supplier.SyncStatus = SyncStatus.NotSynced;
+
+            await _supplierRepository.UpdateAsync(supplier);
+            await _supplierRepository.SaveChangesAsync();
 
             RefreshFilteredSuppliers();
+            _logger.LogInformation("Soft-deleted supplier {SupplierName}", supplier.Name);
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Error deleting supplier: {ex.Message}";
+            _logger.LogError(ex, "Error deleting supplier");
+            SetError($"Error deleting supplier: {ex.Message}");
         }
         finally
         {
@@ -165,7 +218,7 @@ public partial class SupplierViewModel : BaseViewModel
         Phone = string.Empty;
         Email = string.Empty;
         Address = string.Empty;
-        ErrorMessage = string.Empty;
+        ClearError();
     }
 
     private void RefreshFilteredSuppliers()
@@ -177,63 +230,13 @@ public partial class SupplierViewModel : BaseViewModel
         if (!string.IsNullOrWhiteSpace(SearchText))
         {
             var searchLower = SearchText.ToLowerInvariant();
-            filtered = filtered.Where(s => 
+            filtered = filtered.Where(s =>
                 s.Name.ToLowerInvariant().Contains(searchLower) ||
                 (s.ContactPerson?.ToLowerInvariant().Contains(searchLower) == true) ||
                 (s.Phone?.Contains(SearchText) == true));
         }
 
         foreach (var supplier in filtered.OrderBy(s => s.Name))
-        {
             FilteredSuppliers.Add(supplier);
-        }
-    }
-
-    private void LoadSampleSuppliers()
-    {
-        var sampleSuppliers = new List<Supplier>
-        {
-            new() 
-            { 
-                Id = Guid.NewGuid(), 
-                Name = "MediCorp Pharmaceuticals", 
-                ContactPerson = "John Smith", 
-                Phone = "+91-9876543210", 
-                Email = "john@medicorp.com",
-                Address = "123 Medical Street, Mumbai, Maharashtra",
-                IsActive = true,
-                CreatedAt = DateTime.Now.AddDays(-30),
-                UpdatedAt = DateTime.Now.AddDays(-5)
-            },
-            new() 
-            { 
-                Id = Guid.NewGuid(), 
-                Name = "HealthPlus Distributors", 
-                ContactPerson = "Sarah Johnson", 
-                Phone = "+91-8765432109", 
-                Email = "sarah@healthplus.com",
-                Address = "456 Wellness Avenue, Delhi, Delhi",
-                IsActive = true,
-                CreatedAt = DateTime.Now.AddDays(-25),
-                UpdatedAt = DateTime.Now.AddDays(-3)
-            },
-            new() 
-            { 
-                Id = Guid.NewGuid(), 
-                Name = "Global Medical Supplies", 
-                ContactPerson = "Michael Brown", 
-                Phone = "+91-7654321098", 
-                Email = "michael@globalmed.com",
-                Address = "789 Healthcare Road, Bangalore, Karnataka",
-                IsActive = true,
-                CreatedAt = DateTime.Now.AddDays(-20),
-                UpdatedAt = DateTime.Now.AddDays(-1)
-            }
-        };
-
-        foreach (var supplier in sampleSuppliers)
-        {
-            Suppliers.Add(supplier);
-        }
     }
 }

@@ -1,12 +1,22 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Desktop.Models;
+using Microsoft.Extensions.Logging;
+using Shared.Core.Enums;
+using Shared.Core.Repositories;
+using Shared.Core.Services;
 using System.Collections.ObjectModel;
 
 namespace Desktop.ViewModels;
 
 public partial class PurchaseViewModel : BaseViewModel
 {
+    private readonly IProductRepository _productRepository;
+    private readonly ISupplierRepository _supplierRepository;
+    private readonly IStockRepository _stockRepository;
+    private readonly IInventoryUpdater _inventoryUpdater;
+    private readonly ILogger<PurchaseViewModel> _logger;
+
     [ObservableProperty]
     private string searchText = string.Empty;
 
@@ -25,37 +35,94 @@ public partial class PurchaseViewModel : BaseViewModel
 
     public decimal TotalAmount => PurchaseItems.Sum(item => item.Total);
 
+    // Design-time constructor
     public PurchaseViewModel()
     {
         Title = "Purchase Entry";
-        LoadSampleData();
         GeneratePurchaseNumber();
+    }
+
+    public PurchaseViewModel(
+        IProductRepository productRepository,
+        ISupplierRepository supplierRepository,
+        IStockRepository stockRepository,
+        IInventoryUpdater inventoryUpdater,
+        ILogger<PurchaseViewModel> logger)
+    {
+        _productRepository = productRepository;
+        _supplierRepository = supplierRepository;
+        _stockRepository = stockRepository;
+        _inventoryUpdater = inventoryUpdater;
+        _logger = logger;
+        Title = "Purchase Entry";
+        GeneratePurchaseNumber();
+        _ = Task.Run(LoadSuppliersAsync);
     }
 
     partial void OnSearchTextChanged(string value)
     {
-        SearchProducts(value);
+        _ = SearchProductsAsync(value);
     }
 
     [RelayCommand]
-    private void SearchProducts(string? searchTerm = null)
+    private async Task LoadSuppliersAsync()
+    {
+        try
+        {
+            if (_supplierRepository == null) return;
+            var suppliers = await _supplierRepository.GetActiveSuppliersAsync();
+            Suppliers.Clear();
+            foreach (var s in suppliers)
+            {
+                Suppliers.Add(new Supplier
+                {
+                    Id = s.Id,
+                    Name = s.Name,
+                    ContactPerson = s.ContactPerson,
+                    Phone = s.Phone,
+                    Email = s.Email,
+                    Address = s.Address,
+                    IsActive = s.IsActive,
+                    CreatedAt = s.CreatedAt,
+                    UpdatedAt = s.UpdatedAt
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error loading suppliers");
+            SetError($"Error loading suppliers: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task SearchProductsAsync(string? searchTerm = null)
     {
         searchTerm ??= SearchText;
-        
         SearchResults.Clear();
-        
+
         if (string.IsNullOrWhiteSpace(searchTerm))
             return;
 
-        // Sample search logic - in real app this would query a database
-        var sampleProducts = GetSampleProducts()
-            .Where(p => p.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                       (p.Barcode?.Contains(searchTerm) == true))
-            .Take(5);
-
-        foreach (var product in sampleProducts)
+        try
         {
-            SearchResults.Add(product);
+            if (_productRepository == null) return;
+            var results = await _productRepository.SearchAsync(searchTerm);
+            foreach (var p in results.Take(10))
+            {
+                SearchResults.Add(new Product
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Barcode = p.Barcode,
+                    UnitPrice = p.UnitPrice,
+                    Category = p.Category
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching products");
         }
     }
 
@@ -63,7 +130,7 @@ public partial class PurchaseViewModel : BaseViewModel
     private void AddProduct(Product product)
     {
         var existingItem = PurchaseItems.FirstOrDefault(item => item.ProductId == product.Id);
-        
+
         if (existingItem != null)
         {
             existingItem.Quantity++;
@@ -76,15 +143,14 @@ public partial class PurchaseViewModel : BaseViewModel
                 ProductId = product.Id,
                 ProductName = product.Name,
                 Quantity = 1,
-                UnitCost = product.UnitPrice * 0.8m, // Assume 20% markup
+                UnitCost = product.UnitPrice * 0.8m, // default 20% markup assumption
                 BatchNumber = $"BATCH-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(100, 999)}",
-                ExpiryDate = DateTime.Today.AddMonths(24) // Default 2 years expiry
+                ExpiryDate = DateTime.Today.AddMonths(24)
             });
         }
 
         SearchText = string.Empty;
         SearchResults.Clear();
-        
         OnPropertyChanged(nameof(TotalAmount));
     }
 
@@ -100,47 +166,72 @@ public partial class PurchaseViewModel : BaseViewModel
     {
         if (SelectedSupplier == null)
         {
-            ErrorMessage = "Please select a supplier";
+            SetError("Please select a supplier");
             return;
         }
 
         if (!PurchaseItems.Any())
         {
-            ErrorMessage = "Please add items to the purchase";
+            SetError("Please add items to the purchase");
             return;
         }
 
         IsBusy = true;
-        ErrorMessage = string.Empty;
+        ClearError();
 
         try
         {
-            // Simulate purchase processing
-            await Task.Delay(1000);
-
-            var purchase = new Purchase
+            // Update stock for each purchased product
+            foreach (var item in PurchaseItems)
             {
-                Id = Guid.NewGuid(),
-                PurchaseNumber = PurchaseNumber,
-                SupplierId = SelectedSupplier.Id,
-                SupplierName = SelectedSupplier.Name,
-                TotalAmount = TotalAmount,
-                PurchaseDate = PurchaseDate,
-                Items = PurchaseItems.ToList()
-            };
+                if (_productRepository == null) break;
 
-            // In real app, save to database here
-            // Also update product stock quantities
-            
-            // Reset the form
+                var product = await _productRepository.GetByIdAsync(item.ProductId);
+                if (product == null)
+                {
+                    _logger?.LogWarning("Product {ProductId} not found during purchase completion", item.ProductId);
+                    continue;
+                }
+
+                // Update product batch/expiry if provided
+                if (!string.IsNullOrWhiteSpace(item.BatchNumber))
+                    product.BatchNumber = item.BatchNumber;
+                if (item.ExpiryDate.HasValue)
+                    product.ExpiryDate = item.ExpiryDate;
+                product.PurchasePrice = item.UnitCost;
+                product.UpdatedAt = DateTime.UtcNow;
+                product.SyncStatus = SyncStatus.NotSynced;
+
+                await _productRepository.UpdateAsync(product);
+
+                // Update stock record
+                if (_stockRepository != null)
+                {
+                    var stockEntries = await _stockRepository.FindAsync(s => s.ProductId == item.ProductId);
+                    var stock = stockEntries.FirstOrDefault();
+                    if (stock != null)
+                    {
+                        stock.Quantity += item.Quantity;
+                        stock.UpdatedAt = DateTime.UtcNow;
+                        stock.SyncStatus = SyncStatus.NotSynced;
+                        await _stockRepository.UpdateAsync(stock);
+                    }
+                }
+            }
+
+            if (_productRepository != null)
+                await _productRepository.SaveChangesAsync();
+
+            _logger.LogInformation("Purchase {PurchaseNumber} completed with {ItemCount} items, total ₹{Total}",
+                PurchaseNumber, PurchaseItems.Count, TotalAmount);
+
+            SuccessMessage = $"Purchase completed! {PurchaseNumber} — ₹{TotalAmount:N2}";
             ResetPurchase();
-            
-            // Show success message
-            ErrorMessage = $"Purchase completed successfully! Purchase Number: {purchase.PurchaseNumber}";
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Error completing purchase: {ex.Message}";
+            _logger.LogError(ex, "Error completing purchase");
+            SetError($"Error completing purchase: {ex.Message}");
         }
         finally
         {
@@ -155,44 +246,14 @@ public partial class PurchaseViewModel : BaseViewModel
         SelectedSupplier = null;
         SearchText = string.Empty;
         SearchResults.Clear();
-        ErrorMessage = string.Empty;
+        ClearError();
         GeneratePurchaseNumber();
         PurchaseDate = DateTime.Today;
-        
         OnPropertyChanged(nameof(TotalAmount));
     }
 
     private void GeneratePurchaseNumber()
     {
         PurchaseNumber = $"PUR-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
-    }
-
-    private void LoadSampleData()
-    {
-        var sampleSuppliers = new List<Supplier>
-        {
-            new() { Id = Guid.NewGuid(), Name = "MediCorp Pharmaceuticals", IsActive = true },
-            new() { Id = Guid.NewGuid(), Name = "HealthPlus Distributors", IsActive = true },
-            new() { Id = Guid.NewGuid(), Name = "Global Medical Supplies", IsActive = true }
-        };
-
-        foreach (var supplier in sampleSuppliers)
-        {
-            Suppliers.Add(supplier);
-        }
-    }
-
-    private List<Product> GetSampleProducts()
-    {
-        return new List<Product>
-        {
-            new() { Id = Guid.NewGuid(), Name = "Paracetamol 500mg", Barcode = "1234567890123", UnitPrice = 25.50m, Category = "Medicine" },
-            new() { Id = Guid.NewGuid(), Name = "Aspirin 75mg", Barcode = "2345678901234", UnitPrice = 15.75m, Category = "Medicine" },
-            new() { Id = Guid.NewGuid(), Name = "Vitamin C Tablets", Barcode = "3456789012345", UnitPrice = 45.00m, Category = "Supplement" },
-            new() { Id = Guid.NewGuid(), Name = "Cough Syrup", Barcode = "4567890123456", UnitPrice = 85.25m, Category = "Medicine" },
-            new() { Id = Guid.NewGuid(), Name = "Bandages", Barcode = "5678901234567", UnitPrice = 12.50m, Category = "Medical Supply" },
-            new() { Id = Guid.NewGuid(), Name = "Antiseptic Solution", Barcode = "6789012345678", UnitPrice = 35.00m, Category = "Medical Supply" },
-            new() { Id = Guid.NewGuid(), Name = "Thermometer", Barcode = "7890123456789", UnitPrice = 150.00m, Category = "Medical Device" }
-        };
     }
 }

@@ -1,0 +1,273 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Desktop.ViewModels"
+             x:Class="Desktop.Views.AIInventoryView"
+             x:DataType="vm:AIInventoryViewModel">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Filters Bar -->
+        <Border Grid.Row="0" Classes="card" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <ComboBox Grid.Column="0"
+                          ItemsSource="{Binding Businesses}"
+                          SelectedItem="{Binding SelectedBusiness}"
+                          DisplayMemberBinding="{Binding Name}"
+                          PlaceholderText="Select Business"
+                          HorizontalAlignment="Stretch"
+                          Margin="0,0,8,0"/>
+
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding Shops}"
+                          SelectedItem="{Binding SelectedShop}"
+                          DisplayMemberBinding="{Binding Name}"
+                          PlaceholderText="Select Shop"
+                          HorizontalAlignment="Stretch"
+                          Margin="0,0,8,0"/>
+
+                <Button Grid.Column="2"
+                        Content="🤖 Generate AI Recommendations"
+                        Command="{Binding GenerateRecommendationsCommand}"
+                        IsEnabled="{Binding !IsLoading}"
+                        Classes="accent"
+                        Margin="0,0,8,0"/>
+
+                <Button Grid.Column="3"
+                        Content="📈 Predict Low Stock (30d)"
+                        Command="{Binding PredictLowStockCommand}"
+                        IsEnabled="{Binding !IsLoading}"
+                        Margin="0,0,8,0"/>
+
+                <Button Grid.Column="4"
+                        Content="🔄 Refresh"
+                        Command="{Binding LoadBusinessesCommand}"
+                        IsEnabled="{Binding !IsLoading}"/>
+            </Grid>
+        </Border>
+
+        <!-- Summary Cards -->
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Classes="card" Margin="0,0,5,0">
+                <StackPanel>
+                    <TextBlock Text="Total Products" FontWeight="Bold" FontSize="12"/>
+                    <TextBlock Text="{Binding TotalProducts}"
+                               FontSize="20" FontWeight="Bold" Foreground="#2196F3"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1" Classes="card" Margin="5,0">
+                <StackPanel>
+                    <TextBlock Text="Critical Reorders" FontWeight="Bold" FontSize="12"/>
+                    <TextBlock Text="{Binding CriticalReorders}"
+                               FontSize="20" FontWeight="Bold" Foreground="#F44336"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="2" Classes="card" Margin="5,0">
+                <StackPanel>
+                    <TextBlock Text="Overstock" FontWeight="Bold" FontSize="12"/>
+                    <TextBlock Text="{Binding OverstockProducts}"
+                               FontSize="20" FontWeight="Bold" Foreground="#FF9800"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="3" Classes="card" Margin="5,0">
+                <StackPanel>
+                    <TextBlock Text="Expiry Risk" FontWeight="Bold" FontSize="12"/>
+                    <TextBlock Text="{Binding ExpiringProducts}"
+                               FontSize="20" FontWeight="Bold" Foreground="#FF5722"/>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="4" Classes="card" Margin="5,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="Inventory Value" FontWeight="Bold" FontSize="12"/>
+                    <TextBlock Text="{Binding TotalInventoryValue, StringFormat='৳{0:N0}'}"
+                               FontSize="20" FontWeight="Bold" Foreground="#4CAF50"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Recommendation Tabs -->
+        <TabControl Grid.Row="2">
+            <!-- Reorder Recommendations -->
+            <TabItem Header="Reorder Suggestions">
+                <Border Classes="card">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Reorder Recommendations" FontWeight="Bold" FontSize="14"/>
+                            <Button Grid.Column="1"
+                                    Content="⚠️ Get Overstock Alerts"
+                                    Command="{Binding GetOverstockAlertsCommand}"
+                                    IsEnabled="{Binding !IsLoading}"
+                                    FontSize="12"/>
+                        </Grid>
+                        <DataGrid Grid.Row="1"
+                                  ItemsSource="{Binding ReorderRecommendations}"
+                                  AutoGenerateColumns="False"
+                                  CanUserResizeColumns="True"
+                                  GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Product" Binding="{Binding ProductName}" Width="*"/>
+                                <DataGridTextColumn Header="Current Stock" Binding="{Binding CurrentStock}" Width="110"/>
+                                <DataGridTextColumn Header="Recommended Qty" Binding="{Binding RecommendedOrderQuantity}" Width="130"/>
+                                <DataGridTextColumn Header="Priority" Binding="{Binding Priority}" Width="100"/>
+                                <DataGridTextColumn Header="Reason" Binding="{Binding Reasoning}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+            </TabItem>
+
+            <!-- Expiry Risk -->
+            <TabItem Header="Expiry Risk">
+                <Border Classes="card">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Products at Expiry Risk" FontWeight="Bold" FontSize="14"/>
+                            <Button Grid.Column="1"
+                                    Content="🔍 Check 60-Day Risk"
+                                    Command="{Binding GetExpiryRiskAlertsCommand}"
+                                    IsEnabled="{Binding !IsLoading}"
+                                    FontSize="12"/>
+                        </Grid>
+                        <DataGrid Grid.Row="1"
+                                  ItemsSource="{Binding ExpiryRiskAlerts}"
+                                  AutoGenerateColumns="False"
+                                  CanUserResizeColumns="True"
+                                  GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Product" Binding="{Binding ProductName}" Width="*"/>
+                                <DataGridTextColumn Header="Expiry Date" Binding="{Binding ExpiryDate, StringFormat='dd/MM/yyyy'}" Width="120"/>
+                                <DataGridTextColumn Header="Days Left" Binding="{Binding DaysUntilExpiry}" Width="90"/>
+                                <DataGridTextColumn Header="Stock" Binding="{Binding CurrentStock}" Width="80"/>
+                                <DataGridTextColumn Header="Risk Level" Binding="{Binding RiskLevel}" Width="100"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+            </TabItem>
+
+            <!-- Seasonal Recommendations -->
+            <TabItem Header="Seasonal">
+                <Border Classes="card">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Seasonal Recommendations" FontWeight="Bold" FontSize="14"/>
+                            <Button Grid.Column="1"
+                                    Content="📅 Get Seasonal Insights"
+                                    Command="{Binding GetSeasonalRecommendationsCommand}"
+                                    IsEnabled="{Binding !IsLoading}"
+                                    FontSize="12"/>
+                        </Grid>
+                        <DataGrid Grid.Row="1"
+                                  ItemsSource="{Binding SeasonalRecommendations}"
+                                  AutoGenerateColumns="False"
+                                  CanUserResizeColumns="True"
+                                  GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Season" Binding="{Binding Season}" Width="120"/>
+                                <DataGridTextColumn Header="Expected Demand ↑" Binding="{Binding ExpectedDemandIncrease, StringFormat='{}{0:N1}%'}" Width="150"/>
+                                <DataGridTextColumn Header="Reason" Binding="{Binding Reasoning}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+            </TabItem>
+
+            <!-- Inventory Turnover -->
+            <TabItem Header="Turnover Analysis">
+                <Border Classes="card">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="20" Margin="0,0,0,10">
+                            <TextBlock Text="Inventory Turnover" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding AverageTurnoverRate, StringFormat='Avg Rate: {0:N2}x'}"
+                                       FontSize="13" VerticalAlignment="Center" Foreground="#2196F3"/>
+                        </StackPanel>
+                        <DataGrid Grid.Row="1"
+                                  ItemsSource="{Binding ProductInsights}"
+                                  AutoGenerateColumns="False"
+                                  CanUserResizeColumns="True"
+                                  GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Product" Binding="{Binding ProductName}" Width="*"/>
+                                <DataGridTextColumn Header="Turnover Rate" Binding="{Binding TurnoverRate, StringFormat='{}{0:N2}x'}" Width="120"/>
+                                <DataGridTextColumn Header="Days of Supply" Binding="{Binding DaysOfSupply, StringFormat='{}{0:N0} days'}" Width="120"/>
+                                <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="120"/>
+                                <DataGridTextColumn Header="Classification" Binding="{Binding TurnoverCategory}" Width="120"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+            </TabItem>
+        </TabControl>
+
+        <!-- Error / Status -->
+        <TextBlock Grid.Row="2"
+                   Text="{Binding ErrorMessage}"
+                   Foreground="Red"
+                   IsVisible="{Binding HasError}"
+                   TextWrapping="Wrap"
+                   VerticalAlignment="Bottom"
+                   Margin="0,0,0,4"/>
+
+        <!-- Loading Overlay -->
+        <Border Grid.RowSpan="3"
+                Background="#80000000"
+                IsVisible="{Binding IsLoading}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                <ProgressBar IsIndeterminate="True" Width="200"/>
+                <TextBlock Text="Generating AI recommendations..." Foreground="White" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

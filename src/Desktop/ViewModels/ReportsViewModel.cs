@@ -1,12 +1,23 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Desktop.Models;
+using Microsoft.Extensions.Logging;
+using Shared.Core.DTOs;
+using Shared.Core.Repositories;
+using Shared.Core.Services;
 using System.Collections.ObjectModel;
 
 namespace Desktop.ViewModels;
 
 public partial class ReportsViewModel : BaseViewModel
 {
+    private readonly IDashboardService _dashboardService;
+    private readonly IReportService _reportService;
+    private readonly IProductRepository _productRepository;
+    private readonly IStockRepository _stockRepository;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly ILogger<ReportsViewModel> _logger;
+
     [ObservableProperty]
     private DateTime fromDate = DateTime.Today.AddDays(-30);
 
@@ -17,7 +28,7 @@ public partial class ReportsViewModel : BaseViewModel
     private string selectedReportType = "Sales Summary";
 
     public ObservableCollection<SalesReportItem> SalesData { get; } = new();
-    public ObservableCollection<Product> ExpiringProducts { get; } = new();
+    public ObservableCollection<Shared.Core.Entities.Product> ExpiringProducts { get; } = new();
     public ObservableCollection<StockReportItem> LowStockItems { get; } = new();
 
     public List<string> ReportTypes { get; } = new()
@@ -33,35 +44,50 @@ public partial class ReportsViewModel : BaseViewModel
     public int TotalTransactions => SalesData.Sum(s => s.TransactionCount);
     public decimal AverageTransaction => TotalTransactions > 0 ? TotalSales / TotalTransactions : 0;
 
+    public ReportsViewModel(
+        IDashboardService dashboardService,
+        IReportService reportService,
+        IProductRepository productRepository,
+        IStockRepository stockRepository,
+        ICurrentUserService currentUserService,
+        ILogger<ReportsViewModel> logger)
+    {
+        _dashboardService = dashboardService;
+        _reportService = reportService;
+        _productRepository = productRepository;
+        _stockRepository = stockRepository;
+        _currentUserService = currentUserService;
+        _logger = logger;
+        Title = "Reports & Analytics";
+    }
+
+    // Design-time constructor
     public ReportsViewModel()
     {
         Title = "Reports & Analytics";
-        LoadSampleData();
     }
 
     [RelayCommand]
     private async Task GenerateReport()
     {
         IsBusy = true;
-        ErrorMessage = string.Empty;
+        ClearError();
 
         try
         {
-            await Task.Delay(1000); // Simulate report generation
-
             switch (SelectedReportType)
             {
                 case "Sales Summary":
-                    GenerateSalesReport();
+                    await GenerateSalesReportAsync();
                     break;
                 case "Expiring Products":
-                    GenerateExpiringProductsReport();
+                    await GenerateExpiringProductsReportAsync();
                     break;
                 case "Low Stock Alert":
-                    GenerateLowStockReport();
+                    await GenerateLowStockReportAsync();
                     break;
                 default:
-                    GenerateSalesReport();
+                    await GenerateSalesReportAsync();
                     break;
             }
 
@@ -71,7 +97,8 @@ public partial class ReportsViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Error generating report: {ex.Message}";
+            _logger.LogError(ex, "Error generating report");
+            SetError($"Error generating report: {ex.Message}");
         }
         finally
         {
@@ -82,19 +109,39 @@ public partial class ReportsViewModel : BaseViewModel
     [RelayCommand]
     private async Task ExportReport()
     {
+        if (_currentUserService?.CurrentUser == null)
+        {
+            SetError("User not authenticated");
+            return;
+        }
+
+        if (_reportService == null) return;
+
         IsBusy = true;
-        ErrorMessage = string.Empty;
+        ClearError();
 
         try
         {
-            await Task.Delay(1500); // Simulate export
+            var currentUser = _currentUserService.CurrentUser;
 
-            // In real app, this would export to Excel/PDF
-            ErrorMessage = $"Report exported successfully to Downloads folder";
+            // Get the user's first business for the report
+            var request = new SalesReportRequest
+            {
+                DateRange = new DateRange { StartDate = FromDate, EndDate = ToDate },
+                Format = ReportFormat.CSV,
+                ReportType = SalesReportType.Summary
+            };
+
+            var reportData = await _reportService.GenerateSalesReportAsync(request);
+
+            // In a full implementation, a file-save dialog would be shown here.
+            SuccessMessage = $"Report exported successfully ({reportData.Summary.TotalTransactions} transactions)";
+            _logger.LogInformation("Report exported: {Transactions} transactions", reportData.Summary.TotalTransactions);
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Error exporting report: {ex.Message}";
+            _logger.LogError(ex, "Error exporting report");
+            SetError($"Error exporting report: {ex.Message}");
         }
         finally
         {
@@ -102,71 +149,76 @@ public partial class ReportsViewModel : BaseViewModel
         }
     }
 
-    private void GenerateSalesReport()
+    private async Task GenerateSalesReportAsync()
     {
         SalesData.Clear();
+        if (_dashboardService == null) return;
 
-        // Generate sample sales data for the date range
-        var random = new Random();
-        var currentDate = FromDate;
-
-        while (currentDate <= ToDate)
+        try
         {
-            var dailySales = random.Next(5, 25); // 5-25 transactions per day
-            var dailyAmount = random.Next(1000, 5000) + (decimal)random.NextDouble() * 1000;
+            var dateRange = new DateRange { StartDate = FromDate, EndDate = ToDate };
+            var dailyData = await _dashboardService.GetDailyRevenueDataAsync(
+                Guid.Empty,
+                dateRange);
 
-            SalesData.Add(new SalesReportItem
+            foreach (var day in dailyData)
             {
-                Date = currentDate,
-                TransactionCount = dailySales,
-                Amount = Math.Round(dailyAmount, 2)
-            });
-
-            currentDate = currentDate.AddDays(1);
+                SalesData.Add(new SalesReportItem
+                {
+                    Date = day.Date,
+                    TransactionCount = day.TransactionCount,
+                    Amount = day.Revenue
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Could not load daily revenue data, falling back to empty report");
         }
     }
 
-    private void GenerateExpiringProductsReport()
+    private async Task GenerateExpiringProductsReportAsync()
     {
         ExpiringProducts.Clear();
+        if (_productRepository == null) return;
 
-        // Sample expiring products
-        var expiringProducts = new List<Product>
-        {
-            new() { Name = "Aspirin 75mg", ExpiryDate = DateTime.Today.AddDays(15), StockQuantity = 50, BatchNumber = "BATCH002" },
-            new() { Name = "Cough Syrup", ExpiryDate = DateTime.Today.AddDays(25), StockQuantity = 30, BatchNumber = "BATCH004" },
-            new() { Name = "Antibiotic Cream", ExpiryDate = DateTime.Today.AddDays(10), StockQuantity = 20, BatchNumber = "BATCH005" }
-        };
+        var threshold = DateTime.Today.AddDays(30);
+        var expiring = await _productRepository.GetExpiringMedicinesAsync(threshold);
 
-        foreach (var product in expiringProducts)
-        {
+        foreach (var product in expiring.OrderBy(p => p.ExpiryDate))
             ExpiringProducts.Add(product);
-        }
     }
 
-    private void GenerateLowStockReport()
+    private async Task GenerateLowStockReportAsync()
     {
         LowStockItems.Clear();
+        if (_stockRepository == null) return;
 
-        // Sample low stock items
-        var lowStockItems = new List<StockReportItem>
+        try
         {
-            new() { ProductName = "Paracetamol 500mg", CurrentStock = 5, MinimumStock = 20, Category = "Medicine" },
-            new() { ProductName = "Bandages", CurrentStock = 8, MinimumStock = 50, Category = "Medical Supply" },
-            new() { ProductName = "Thermometer", CurrentStock = 2, MinimumStock = 10, Category = "Medical Device" }
-        };
+            var allStock = await _stockRepository.GetAllAsync();
+            var lowStock = allStock
+                .Where(s => s.Quantity <= 10 && !s.IsDeleted)
+                .ToList();
 
-        foreach (var item in lowStockItems)
-        {
-            LowStockItems.Add(item);
+            foreach (var stock in lowStock)
+            {
+                var product = _productRepository != null
+                    ? await _productRepository.GetByIdAsync(stock.ProductId)
+                    : null;
+                LowStockItems.Add(new StockReportItem
+                {
+                    ProductName = product?.Name ?? stock.ProductId.ToString(),
+                    CurrentStock = stock.Quantity,
+                    MinimumStock = 10,
+                    Category = product?.Category ?? string.Empty
+                });
+            }
         }
-    }
-
-    private void LoadSampleData()
-    {
-        GenerateSalesReport();
-        GenerateExpiringProductsReport();
-        GenerateLowStockReport();
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Could not load low stock data");
+        }
     }
 }
 

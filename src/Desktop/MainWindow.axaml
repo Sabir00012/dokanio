@@ -262,34 +262,22 @@
             
             <!-- Business Management Tab (Business Owners only) -->
             <TabItem Header="Business Management" IsVisible="{Binding IsBusinessOwner}">
-                <TextBlock Text="Business Management functionality will be implemented here" 
-                           HorizontalAlignment="Center" 
-                           VerticalAlignment="Center"
-                           FontSize="16"/>
+                <views:BusinessManagementView DataContext="{Binding BusinessManagementViewModel}"/>
             </TabItem>
             
             <!-- User Management Tab (Business Owners and Shop Managers) -->
             <TabItem Header="User Management" IsVisible="{Binding CanManageUsers}">
-                <TextBlock Text="User Management functionality will be implemented here" 
-                           HorizontalAlignment="Center" 
-                           VerticalAlignment="Center"
-                           FontSize="16"/>
+                <views:UserManagementView DataContext="{Binding UserManagementViewModel}"/>
             </TabItem>
             
             <!-- AI Inventory Tab -->
             <TabItem Header="AI Inventory" IsVisible="{Binding CanManageInventory}">
-                <TextBlock Text="AI Inventory Management functionality will be implemented here" 
-                           HorizontalAlignment="Center" 
-                           VerticalAlignment="Center"
-                           FontSize="16"/>
+                <views:AIInventoryView DataContext="{Binding AIInventoryViewModel}"/>
             </TabItem>
             
             <!-- Advanced Reports Tab -->
             <TabItem Header="Advanced Reports" IsVisible="{Binding CanViewReports}">
-                <TextBlock Text="Advanced Reports and Analytics functionality will be implemented here" 
-                           HorizontalAlignment="Center" 
-                           VerticalAlignment="Center"
-                           FontSize="16"/>
+                <views:AdvancedReportsView DataContext="{Binding AdvancedReportsViewModel}"/>
             </TabItem>
             
             <!-- Basic Reports Tab -->
