@@ -50,6 +50,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IIntegratedPosService, IntegratedPosService>();
         services.AddScoped<IApplicationStartupService, ApplicationStartupService>();
         services.AddScoped<IBusinessManagementService, BusinessManagementService>();
+        services.AddScoped<IStockValidationService, StockValidationService>();
         
         // Register device context service
         services.AddSingleton<IDeviceContextService, DeviceContextService>();
@@ -263,6 +264,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IApplicationStartupService, ApplicationStartupService>();
         services.AddScoped<IDatabaseMigrationService, DatabaseMigrationService>();
         services.AddScoped<IBusinessManagementService, BusinessManagementService>();
+        services.AddScoped<IStockValidationService, StockValidationService>();
         
         // Register system integration service for testing
         services.AddScoped<ISystemIntegrationService, SystemIntegrationService>();

@@ -16,6 +16,7 @@ public interface ISaleService
     // Item Management
     Task<Sale> AddItemToSaleAsync(Guid saleId, Guid productId, int quantity, decimal unitPrice, string? batchNumber = null);
     Task<Sale> AddWeightBasedItemToSaleAsync(Guid saleId, Guid productId, decimal weight, string? batchNumber = null);
+    Task<Sale> RemoveItemFromSaleAsync(Guid saleId, Guid saleItemId);
 
     // Calculation and Completion
     Task<decimal> CalculateSaleTotalAsync(Guid saleId);

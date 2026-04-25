@@ -625,6 +625,61 @@ public class SaleService : ISaleService
         return sale;
     }
 
+    /// <summary>
+    /// Removes an item from a sale using soft-delete and recalculates the sale total.
+    /// Transitions sale back to Draft if all items are removed.
+    /// Requirement 2.6: Support removing items from sales with proper cleanup.
+    /// </summary>
+    public async Task<Sale> RemoveItemFromSaleAsync(Guid saleId, Guid saleItemId)
+    {
+        if (saleId == Guid.Empty)
+            throw new ArgumentException("Sale ID cannot be empty.", nameof(saleId));
+
+        if (saleItemId == Guid.Empty)
+            throw new ArgumentException("Sale item ID cannot be empty.", nameof(saleItemId));
+
+        var sale = await _saleRepository.GetByIdAsync(saleId);
+        if (sale == null)
+            throw new ArgumentException($"Sale {saleId} not found.", nameof(saleId));
+
+        if (sale.Status == SaleStatus.Completed || sale.Status == SaleStatus.Cancelled)
+            throw new InvalidOperationException($"Cannot remove items from a sale with status {sale.Status}.");
+
+        var saleItems = await _saleItemRepository.FindAsync(si => si.SaleId == saleId && !si.IsDeleted);
+        var itemToRemove = saleItems.FirstOrDefault(si => si.Id == saleItemId);
+
+        if (itemToRemove == null)
+            throw new ArgumentException($"Sale item {saleItemId} not found in sale {saleId}.", nameof(saleItemId));
+
+        // Soft-delete the item
+        itemToRemove.IsDeleted = true;
+        itemToRemove.DeletedAt = DateTime.UtcNow;
+
+        await _saleItemRepository.UpdateAsync(itemToRemove);
+        await _saleItemRepository.SaveChangesAsync();
+
+        _logger.LogInformation("Removed item {SaleItemId} (product {ProductId}) from sale {SaleId}",
+            saleItemId, itemToRemove.ProductId, saleId);
+
+        // Recalculate sale total after removal
+        sale.TotalAmount = await CalculateSaleTotalAsync(saleId);
+        sale.UpdatedAt = DateTime.UtcNow;
+        sale.SyncStatus = SyncStatus.NotSynced;
+
+        // If no active items remain, transition back to Draft
+        var remainingItems = await _saleItemRepository.FindAsync(si => si.SaleId == saleId && !si.IsDeleted);
+        if (!remainingItems.Any() && sale.Status == SaleStatus.Active)
+        {
+            sale.Status = SaleStatus.Draft;
+            _logger.LogDebug("Sale {SaleId} transitioned back to Draft (no remaining items)", saleId);
+        }
+
+        await _saleRepository.UpdateAsync(sale);
+        await _saleRepository.SaveChangesAsync();
+
+        return sale;
+    }
+
     // =========================================================================
     // Calculation Methods
     // =========================================================================
