@@ -137,7 +137,7 @@ public partial class ComprehensiveMobileSaleViewModel : SaleViewModel
             Id = "voice_search",
             Title = "Voice",
             Icon = "mic_icon",
-            Command = VoiceSearchCommand,
+            Command = VoiceSearchComprehensiveCommand,
             IsEnabled = EnableVoiceInput
         });
 
@@ -155,7 +155,7 @@ public partial class ComprehensiveMobileSaleViewModel : SaleViewModel
             Id = "settings",
             Title = "Settings",
             Icon = "settings_icon",
-            Command = ShowMobileSettingsCommand,
+            Command = ShowMobileSettingsComprehensiveCommand,
             IsEnabled = true
         });
     }
@@ -246,6 +246,150 @@ public partial class ComprehensiveMobileSaleViewModel : SaleViewModel
             EnablePinchToZoom = !EnablePinchToZoom;
             TriggerHapticFeedback(HapticFeedbackType.Click);
         }
+    }
+
+    [RelayCommand]
+    private async Task HandleSwipeLeftComprehensive()
+    {
+        if (!EnableSwipeGestures) return;
+        TriggerHapticFeedback(HapticFeedbackType.Click);
+        // Swipe left to show quick actions menu
+        await ShowQuickActionsMenu();
+    }
+
+    [RelayCommand]
+    private async Task HandleSwipeRightComprehensive()
+    {
+        if (!EnableSwipeGestures) return;
+        TriggerHapticFeedback(HapticFeedbackType.Click);
+        // Swipe right to open customer lookup
+        await LookupCustomer();
+    }
+
+    [RelayCommand]
+    private async Task HandleSwipeUpComprehensive()
+    {
+        if (!EnableSwipeGestures) return;
+        TriggerHapticFeedback(HapticFeedbackType.Click);
+        // Swipe up to complete sale if ready, otherwise show quick add
+        if (CanCompleteSale)
+        {
+            await CompleteSale();
+        }
+        else
+        {
+            await ShowQuickAddMenu();
+        }
+    }
+
+    [RelayCommand]
+    private async Task HandleSwipeDownComprehensive()
+    {
+        if (!EnableSwipeGestures) return;
+        TriggerHapticFeedback(HapticFeedbackType.Click);
+        // Swipe down to refresh data
+        await RefreshData();
+    }
+
+    [RelayCommand]
+    private async Task VoiceSearchComprehensive()
+    {
+        if (!EnableVoiceInput)
+        {
+            SetError("Voice input is disabled");
+            return;
+        }
+
+        try
+        {
+            IsVoiceInputActive = true;
+            VoiceInputStatus = "Listening...";
+            TriggerHapticFeedback(HapticFeedbackType.Click);
+
+            var permissionStatus = await Microsoft.Maui.ApplicationModel.Permissions.RequestAsync<Microsoft.Maui.ApplicationModel.Permissions.Microphone>();
+            if (permissionStatus != PermissionStatus.Granted)
+            {
+                SetError("Microphone permission not granted");
+                VoiceInputStatus = "Permission denied";
+                TriggerHapticFeedback(HapticFeedbackType.LongPress);
+                return;
+            }
+
+            // Delegate to the base VoiceSearch which handles SpeechToText
+            await VoiceSearch();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Voice search failed");
+            SetError($"Voice search failed: {ex.Message}");
+            VoiceInputStatus = "Voice search failed";
+            TriggerHapticFeedback(HapticFeedbackType.LongPress);
+        }
+        finally
+        {
+            IsVoiceInputActive = false;
+            _ = Task.Delay(3000).ContinueWith(_ =>
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    if (!IsVoiceInputActive) VoiceInputStatus = string.Empty;
+                });
+            });
+        }
+    }
+
+    private async Task ProcessVoiceCommandComprehensive(string command)
+    {
+        var lowerCommand = command.ToLowerInvariant();
+
+        if (lowerCommand.Contains("scan") || lowerCommand.Contains("barcode"))
+        {
+            await ScanBarcode();
+        }
+        else if (lowerCommand.Contains("customer") || lowerCommand.Contains("lookup"))
+        {
+            await LookupCustomer();
+        }
+        else if (lowerCommand.Contains("complete") || lowerCommand.Contains("finish"))
+        {
+            await CompleteSale();
+        }
+        else if (lowerCommand.Contains("clear") || lowerCommand.Contains("reset"))
+        {
+            await ClearSale();
+        }
+        else
+        {
+            // Extract product name and search
+            var commandWords = new[] { "add", "search", "find", "get", "buy" };
+            var words = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var productName = string.Join(" ", words.Where(w => !commandWords.Contains(w.ToLowerInvariant())));
+            if (!string.IsNullOrWhiteSpace(productName))
+            {
+                await SearchAndAddProduct(productName);
+            }
+        }
+    }
+
+    [RelayCommand]
+    private async Task ShowMobileSettingsComprehensive()
+    {
+        var settings = new[]
+        {
+            $"Haptic Feedback: {(EnableHapticFeedback ? "On" : "Off")}",
+            $"Voice Input: {(EnableVoiceInput ? "On" : "Off")}",
+            $"Gesture Navigation: {(EnableGestureNavigation ? "On" : "Off")}",
+            $"One-Handed Mode: {(IsOneHandedMode ? "On" : "Off")}",
+            $"Compact Mode: {(IsCompactMode ? "On" : "Off")}",
+            $"Auto Save: {(EnableAutoSave ? "On" : "Off")}",
+            $"Shake to Refresh: {(EnableShakeToRefresh ? "On" : "Off")}",
+            $"Pinch to Zoom: {(EnablePinchToZoom ? "On" : "Off")}"
+        };
+
+        var selectedSetting = await Shell.Current.DisplayActionSheet(
+            "Mobile Settings", "Cancel", null, settings);
+
+        await HandleSettingToggle(selectedSetting);
     }
 
     [RelayCommand]
@@ -458,7 +602,7 @@ public partial class ComprehensiveMobileSaleViewModel : SaleViewModel
                 await Shell.Current.DisplayAlert("Saved", "Sale saved as draft", "OK");
                 break;
             case "Settings":
-                await ShowMobileSettings();
+                await ShowMobileSettingsComprehensive();
                 break;
             case "Help":
                 await ShowMobileHelp();
