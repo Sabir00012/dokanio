@@ -584,11 +584,13 @@ public class SaleService : ISaleService
         if (!product.RatePerKilogram.HasValue)
             throw new InvalidOperationException("Weight-based product must have a rate per kilogram defined.");
 
-        if (!await _weightBasedPricingService.ValidateWeightAsync(weight, product))
+        // Round weight to product precision first (Requirement 5.2), then validate
+        var roundedWeight = _weightBasedPricingService.RoundWeight(weight, product.WeightPrecision);
+
+        if (!await _weightBasedPricingService.ValidateWeightAsync(roundedWeight, product))
             throw new ArgumentException("Invalid weight value.", nameof(weight));
 
-        var roundedWeight = _weightBasedPricingService.RoundWeight(weight, product.WeightPrecision);
-        var totalPrice = await _weightBasedPricingService.CalculatePriceAsync(product, weight);
+        var totalPrice = await _weightBasedPricingService.CalculatePriceAsync(product, roundedWeight);
 
         var saleItem = new SaleItem
         {
@@ -599,6 +601,7 @@ public class SaleService : ISaleService
             UnitPrice = product.RatePerKilogram.Value,
             Weight = roundedWeight,
             RatePerKilogram = product.RatePerKilogram.Value,
+            IsWeightBased = true,
             TotalPrice = totalPrice,
             BatchNumber = batchNumber
         };
@@ -683,6 +686,76 @@ public class SaleService : ISaleService
     // =========================================================================
     // Calculation Methods
     // =========================================================================
+
+    /// <summary>
+    /// Updates the weight of a weight-based sale item and immediately recalculates the line total.
+    /// Validates the new weight against product constraints before applying.
+    /// Requirement 5.4: When weight is modified, immediately recalculate the line total.
+    /// Requirement 5.1: Validate weight against product constraints.
+    /// Requirement 5.5: Validate weight values against minimum and maximum limits.
+    /// </summary>
+    public async Task<Sale> UpdateItemWeightAsync(Guid saleId, Guid saleItemId, decimal newWeight)
+    {
+        if (saleId == Guid.Empty)
+            throw new ArgumentException("Sale ID cannot be empty.", nameof(saleId));
+
+        if (saleItemId == Guid.Empty)
+            throw new ArgumentException("Sale item ID cannot be empty.", nameof(saleItemId));
+
+        if (newWeight <= 0)
+            throw new ArgumentOutOfRangeException(nameof(newWeight), "Weight must be greater than zero.");
+
+        var sale = await _saleRepository.GetByIdAsync(saleId);
+        if (sale == null)
+            throw new ArgumentException($"Sale {saleId} not found.", nameof(saleId));
+
+        if (sale.Status == SaleStatus.Completed || sale.Status == SaleStatus.Cancelled)
+            throw new InvalidOperationException($"Cannot modify items in a sale with status {sale.Status}.");
+
+        var saleItems = await _saleItemRepository.FindAsync(si => si.SaleId == saleId && !si.IsDeleted);
+        var saleItem = saleItems.FirstOrDefault(si => si.Id == saleItemId);
+
+        if (saleItem == null)
+            throw new ArgumentException($"Sale item {saleItemId} not found in sale {saleId}.", nameof(saleItemId));
+
+        if (!saleItem.IsWeightBased)
+            throw new InvalidOperationException("Cannot update weight for a non-weight-based item. Use UpdateItemQuantityAsync instead.");
+
+        var product = await _productService.GetProductByIdAsync(saleItem.ProductId);
+        if (product == null)
+            throw new InvalidOperationException($"Product {saleItem.ProductId} not found.");
+
+        // Round weight to product precision (Requirement 5.2)
+        var roundedWeight = _weightBasedPricingService.RoundWeight(newWeight, product.WeightPrecision);
+
+        // Validate new weight against product constraints (Requirement 5.1, 5.5)
+        if (!await _weightBasedPricingService.ValidateWeightAsync(roundedWeight, product))
+            throw new ArgumentException($"Invalid weight value for product '{product.Name}'. Check minimum/maximum weight constraints and precision settings.", nameof(newWeight));
+
+        // Recalculate price using rate-per-kilogram (Requirement 5.3)
+        var newTotalPrice = await _weightBasedPricingService.CalculatePriceAsync(product, roundedWeight);
+
+        // Update the sale item
+        saleItem.Weight = roundedWeight;
+        saleItem.TotalPrice = newTotalPrice;
+
+        await _saleItemRepository.UpdateAsync(saleItem);
+        await _saleItemRepository.SaveChangesAsync();
+
+        // Immediately recalculate sale total (Requirement 5.4)
+        sale.TotalAmount = await CalculateSaleTotalAsync(saleId);
+        sale.UpdatedAt = DateTime.UtcNow;
+        sale.SyncStatus = SyncStatus.NotSynced;
+
+        await _saleRepository.UpdateAsync(sale);
+        await _saleRepository.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Updated weight for item {SaleItemId} in sale {SaleId}: {OldWeight}kg → {NewWeight}kg, new total: {NewTotal}",
+            saleItemId, saleId, saleItem.Weight, roundedWeight, newTotalPrice);
+
+        return sale;
+    }
 
     /// <summary>
     /// Calculates the total amount for a sale from its items.

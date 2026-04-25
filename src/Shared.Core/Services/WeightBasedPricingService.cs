@@ -51,6 +51,14 @@ public class WeightBasedPricingService : IWeightBasedPricingService
         if (product.WeightPrecision < 0 || product.WeightPrecision > MaxPrecision)
             return false;
 
+        // Check product-specific minimum weight constraint (Requirement 5.5)
+        if (product.MinWeightKg.HasValue && weight < product.MinWeightKg.Value)
+            return false;
+
+        // Check product-specific maximum weight constraint (Requirement 5.5)
+        if (product.MaxWeightKg.HasValue && weight > product.MaxWeightKg.Value)
+            return false;
+
         // Check if weight has more decimal places than allowed precision
         var roundedWeight = RoundWeight(weight, product.WeightPrecision);
         return Math.Abs(weight - roundedWeight) < 0.0000001m; // Allow for floating point precision issues
@@ -91,7 +99,13 @@ public class WeightBasedPricingService : IWeightBasedPricingService
 
             if (!await ValidateWeightAsync(weight, product))
             {
-                result.ValidationErrors.Add($"Weight must be between {MinWeight} and {MaxWeight} kg with maximum {product.WeightPrecision} decimal places");
+                var minConstraint = product.MinWeightKg.HasValue
+                    ? $"{product.MinWeightKg.Value}"
+                    : MinWeight.ToString();
+                var maxConstraint = product.MaxWeightKg.HasValue
+                    ? $"{product.MaxWeightKg.Value}"
+                    : MaxWeight.ToString();
+                result.ValidationErrors.Add($"Weight must be between {minConstraint} and {maxConstraint} kg with maximum {product.WeightPrecision} decimal places");
                 result.IsValid = false;
                 return result;
             }

@@ -26,6 +26,12 @@ public class SaleItem : ISoftDeletable
     [Range(0, double.MaxValue)]
     public decimal? RatePerKilogram { get; set; }
     
+    /// <summary>
+    /// Indicates whether this item is priced by weight rather than discrete quantity.
+    /// When true, TotalPrice = Weight * RatePerKilogram.
+    /// </summary>
+    public bool IsWeightBased { get; set; } = false;
+    
     // Calculated total price (quantity * unitPrice for regular items, weight * ratePerKg for weight-based)
     [Range(0, double.MaxValue)]
     public decimal TotalPrice { get; set; }

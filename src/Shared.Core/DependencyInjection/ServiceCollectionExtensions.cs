@@ -40,6 +40,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IWeightBasedPricingService, WeightBasedPricingService>();
         services.AddScoped<IDiscountService, DiscountService>();
+        services.AddScoped<IDiscountProcessingEngine, DiscountProcessingEngine>();
         services.AddScoped<IMembershipService, MembershipService>();
         services.AddScoped<IRealTimeCalculationEngine, RealTimeCalculationEngine>();
         services.AddScoped<ICustomerLookupService, CustomerLookupService>();
@@ -231,6 +232,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IWeightBasedPricingService, WeightBasedPricingService>();
         services.AddScoped<IDiscountService, DiscountService>();
+        services.AddScoped<IDiscountProcessingEngine, DiscountProcessingEngine>();
         services.AddScoped<IMembershipService, MembershipService>();
         services.AddScoped<IRealTimeCalculationEngine, RealTimeCalculationEngine>();
         services.AddScoped<ICustomerLookupService, CustomerLookupService>();

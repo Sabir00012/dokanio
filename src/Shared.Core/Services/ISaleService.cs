@@ -17,6 +17,12 @@ public interface ISaleService
     Task<Sale> AddItemToSaleAsync(Guid saleId, Guid productId, int quantity, decimal unitPrice, string? batchNumber = null);
     Task<Sale> AddWeightBasedItemToSaleAsync(Guid saleId, Guid productId, decimal weight, string? batchNumber = null);
     Task<Sale> RemoveItemFromSaleAsync(Guid saleId, Guid saleItemId);
+    
+    /// <summary>
+    /// Updates the weight of a weight-based sale item and immediately recalculates the line total.
+    /// Requirement 5.4: When weight is modified, immediately recalculate the line total.
+    /// </summary>
+    Task<Sale> UpdateItemWeightAsync(Guid saleId, Guid saleItemId, decimal newWeight);
 
     // Calculation and Completion
     Task<decimal> CalculateSaleTotalAsync(Guid saleId);
