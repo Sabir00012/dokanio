@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
         // Add ViewModels
         services.AddTransient<MainViewModel>();
         services.AddTransient<SaleViewModel>();
+        services.AddTransient<SaleTabContainerViewModel>();
         services.AddTransient<ProductViewModel>();
         services.AddTransient<PurchaseViewModel>();
         services.AddTransient<SupplierViewModel>();
@@ -28,6 +29,9 @@ public static class ServiceCollectionExtensions
         services.AddTransient<BusinessManagementViewModel>();
         services.AddTransient<AdvancedReportsViewModel>();
         services.AddTransient<AIInventoryViewModel>();
+        services.AddTransient<ConfigurationViewModel>();
+        // Note: BarcodeScannerWindowViewModel requires sessionId and shopId at construction time,
+        // so it is instantiated directly in the view code-behind rather than via DI.
         
         return services;
     }
