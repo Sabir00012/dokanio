@@ -135,6 +135,14 @@
                             </StackPanel>
                         </Border>
                         
+                        <!-- Loading Products Indicator -->
+                        <Border IsVisible="{Binding IsLoadingProducts, FallbackValue=False}" Classes="status-warning">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ProgressBar Classes="loading-circular" IsIndeterminate="True" Width="16" Height="16"/>
+                                <TextBlock Text="Loading product details..." Classes="body-2"/>
+                            </StackPanel>
+                        </Border>
+                        
                         <Border IsVisible="{Binding HasSearched, FallbackValue=False}" Classes="status-success">
                             <TextBlock Text="{Binding SearchResults.Count, StringFormat=\{0\} products found}" Classes="body-2"/>
                         </Border>
@@ -433,19 +441,26 @@
                                     HorizontalAlignment="Stretch"
                                     TabIndex="15"/>
                             
+                            <Button Content="❌ Cancel Sale" 
+                                    Command="{Binding CancelSaleCommand}"
+                                    Classes="btn-danger"
+                                    HorizontalAlignment="Stretch"
+                                    IsVisible="{Binding SaleItems.Count, Converter={StaticResource CountToVisibilityConverter}}"
+                                    TabIndex="16"/>
+                            
                             <Button Content="🖨️ Print Receipt" 
                                     Command="{Binding PrintReceiptCommand}"
                                     Classes="btn-outline"
                                     HorizontalAlignment="Stretch"
                                     IsEnabled="{Binding CanPrintReceipt, FallbackValue=False}"
-                                    TabIndex="16"/>
+                                    TabIndex="17"/>
                             
                             <Button Content="📧 Email Receipt" 
                                     Command="{Binding EmailReceiptCommand}"
                                     Classes="btn-outline"
                                     HorizontalAlignment="Stretch"
                                     IsEnabled="{Binding CanEmailReceipt, FallbackValue=False}"
-                                    TabIndex="17"/>
+                                    TabIndex="18"/>
                         </StackPanel>
                         
                         <!-- Keyboard Shortcuts Info -->
@@ -499,6 +514,29 @@
                             Foreground="{Binding RelativeSource={RelativeSource AncestorType=Border}, Path=BorderBrush}"
                             VerticalAlignment="Top"/>
                 </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- Persistent Error Banner -->
+        <Border IsVisible="{Binding HasError, FallbackValue=False}"
+                VerticalAlignment="Bottom"
+                HorizontalAlignment="Stretch"
+                Margin="0,0,0,0"
+                ZIndex="998">
+            <Border Classes="status-error" CornerRadius="0">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="⚠️" FontSize="14" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding ErrorMessage}" Classes="body-2" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Content="✕"
+                            Classes="btn-small"
+                            Background="Transparent"
+                            Command="{Binding ClearErrorDisplayCommand}"
+                            VerticalAlignment="Center"
+                            Margin="8,0,0,0"/>
+                </Grid>
             </Border>
         </Border>
     </Grid>

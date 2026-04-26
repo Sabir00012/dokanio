@@ -147,6 +147,7 @@ public partial class SaleViewModel : BaseViewModel
     private CustomerLookupResult? _currentCustomer;
     private ShopConfiguration? _shopConfiguration;
     private CancellationTokenSource? _calculationCancellationToken;
+    private Guid? _currentSaleId; // Tracks the persisted sale ID during a transaction
 
     // ── Missing properties referenced by SaleView.axaml ──────────────────────
 
@@ -164,6 +165,13 @@ public partial class SaleViewModel : BaseViewModel
 
     [ObservableProperty]
     private bool isProcessingSale;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanCompleteSale))]
+    private bool isSaving;
+
+    [ObservableProperty]
+    private bool isLoadingProducts;
 
     [ObservableProperty]
     private bool canCompleteSale = true;
@@ -185,6 +193,12 @@ public partial class SaleViewModel : BaseViewModel
 
     [ObservableProperty]
     private string message = string.Empty;
+
+    [ObservableProperty]
+    private string messageType = "success"; // "success", "warning", "error"
+
+    // Timer for auto-clearing transient messages
+    private Timer? _messageClearTimer;
 
     public SaleViewModel(
         IBarcodeIntegrationService? barcodeIntegrationService = null,
@@ -226,6 +240,9 @@ public partial class SaleViewModel : BaseViewModel
         
         // Initialize calculation timer for debounced calculations
         _calculationTimer = new Timer(PerformCalculation, null, Timeout.Infinite, Timeout.Infinite);
+        
+        // Initialize message auto-clear timer (fires once after delay)
+        _messageClearTimer = new Timer(ClearMessageCallback, null, Timeout.Infinite, Timeout.Infinite);
     }
 
     partial void OnSearchTextChanged(string value)
@@ -291,6 +308,7 @@ public partial class SaleViewModel : BaseViewModel
     {
         HasUnsavedChanges = true;
         TriggerRealTimeCalculation();
+        UpdateCanCompleteSale();
         
         // Subscribe to property changes on new items
         if (e.NewItems != null)
@@ -405,6 +423,7 @@ public partial class SaleViewModel : BaseViewModel
         searchTerm ??= SearchText;
 
         SearchResults.Clear();
+        HasSearched = false;
 
         if (string.IsNullOrWhiteSpace(searchTerm))
             return;
@@ -412,6 +431,8 @@ public partial class SaleViewModel : BaseViewModel
         if (_productRepository != null)
         {
             // Async search via repository — fire-and-forget with UI marshal
+            IsSearching = true;
+            IsLoadingProducts = true;
             _ = Task.Run(async () =>
             {
                 try
@@ -436,16 +457,39 @@ public partial class SaleViewModel : BaseViewModel
 
                     var sync = SynchronizationContext.Current;
                     if (sync != null)
-                        sync.Post(_ => { SearchResults.Clear(); foreach (var p in desktopProducts) SearchResults.Add(p); }, null);
+                        sync.Post(_ =>
+                        {
+                            SearchResults.Clear();
+                            foreach (var p in desktopProducts) SearchResults.Add(p);
+                            IsSearching = false;
+                            IsLoadingProducts = false;
+                            HasSearched = true;
+                        }, null);
                     else
                     {
                         SearchResults.Clear();
                         foreach (var p in desktopProducts) SearchResults.Add(p);
+                        IsSearching = false;
+                        IsLoadingProducts = false;
+                        HasSearched = true;
                     }
                 }
                 catch (Exception ex)
                 {
                     _logger?.LogError(ex, "Error searching products");
+                    var sync = SynchronizationContext.Current;
+                    if (sync != null)
+                        sync.Post(_ =>
+                        {
+                            IsSearching = false;
+                            IsLoadingProducts = false;
+                            SetError($"Product search failed: {ex.Message}");
+                        }, null);
+                    else
+                    {
+                        IsSearching = false;
+                        IsLoadingProducts = false;
+                    }
                 }
             });
         }
@@ -459,6 +503,8 @@ public partial class SaleViewModel : BaseViewModel
 
             foreach (var product in sampleProducts)
                 SearchResults.Add(product);
+
+            HasSearched = true;
         }
     }
 
@@ -467,10 +513,48 @@ public partial class SaleViewModel : BaseViewModel
     {
         try
         {
+            // Validate product availability via stock service before adding
+            if (_stockValidationService != null)
+            {
+                var productValidation = await _stockValidationService.ValidateProductForSaleAsync(product.Id);
+                if (!productValidation.IsValid)
+                {
+                    var reason = productValidation.IsExpired
+                        ? $"Product '{product.Name}' is expired (expiry: {productValidation.ExpiryDate:d})"
+                        : !productValidation.IsActive
+                            ? $"Product '{product.Name}' is inactive and cannot be sold"
+                            : productValidation.InvalidReason ?? $"Product '{product.Name}' is not available for sale";
+                    SetError(reason);
+                    return;
+                }
+
+                var stockResult = await _stockValidationService.ValidateProductAvailabilityAsync(
+                    product.Id, 1, _shopId != Guid.Empty ? _shopId : null);
+                if (!stockResult.IsAvailable)
+                {
+                    var stockMsg = stockResult.AvailableQuantity == 0
+                        ? $"'{product.Name}' is out of stock"
+                        : $"Insufficient stock for '{product.Name}'. Available: {stockResult.AvailableQuantity}";
+                    SetError(stockMsg);
+                    return;
+                }
+            }
+
             var existingItem = SaleItems.FirstOrDefault(item => item.ProductId == product.Id);
             
             if (existingItem != null)
             {
+                // Validate that we can add one more unit
+                if (_stockValidationService != null)
+                {
+                    var stockResult = await _stockValidationService.ValidateProductAvailabilityAsync(
+                        product.Id, existingItem.Quantity + 1, _shopId != Guid.Empty ? _shopId : null);
+                    if (!stockResult.IsAvailable)
+                    {
+                        SetError($"Cannot add more '{product.Name}'. Available stock: {stockResult.AvailableQuantity}");
+                        return;
+                    }
+                }
                 existingItem.Quantity++;
             }
             else
@@ -499,6 +583,7 @@ public partial class SaleViewModel : BaseViewModel
             SearchResults.Clear();
             
             TriggerRealTimeCalculation();
+            UpdateCanCompleteSale();
             
             _logger?.LogDebug("Added product {ProductName} to sale", product.Name);
         }
@@ -523,6 +608,7 @@ public partial class SaleViewModel : BaseViewModel
             }
             
             TriggerRealTimeCalculation();
+            UpdateCanCompleteSale();
             
             _logger?.LogDebug("Removed item {ProductName} from sale", item.ProductName);
         }
@@ -574,18 +660,20 @@ public partial class SaleViewModel : BaseViewModel
     {
         if (!SaleItems.Any())
         {
-            ErrorMessage = "Please add items to the sale";
+            SetError("Please add items to the sale");
             return;
         }
 
         if (SelectedPaymentMethod == Desktop.Models.PaymentMethod.Cash && AmountReceived < Total)
         {
-            ErrorMessage = "Amount received is less than total";
+            SetError("Amount received is less than total");
             return;
         }
 
-        IsBusy = true;
-        ErrorMessage = string.Empty;
+        IsSaving = true;
+        IsProcessingSale = true;
+        BusyMessage = "Processing sale...";
+        ClearError();
 
         try
         {
@@ -608,6 +696,7 @@ public partial class SaleViewModel : BaseViewModel
             {
                 // Build the sale using the existing ISaleService API
                 var sale = await _saleService.CreateSaleAsync(_shopId, _userId, _currentCustomer?.Id);
+                _currentSaleId = sale.Id;
 
                 foreach (var item in SaleItems)
                 {
@@ -619,6 +708,7 @@ public partial class SaleViewModel : BaseViewModel
                     sale.Id, (Shared.Core.Enums.PaymentMethod)SelectedPaymentMethod);
 
                 invoiceNumber = completedSale.InvoiceNumber;
+                _currentSaleId = null;
 
                 // Print receipt if service is available
                 if (_receiptService != null)
@@ -626,6 +716,8 @@ public partial class SaleViewModel : BaseViewModel
                     try
                     {
                         await _receiptService.GenerateReceiptAsync(completedSale);
+                        CanPrintReceipt = true;
+                        CanEmailReceipt = !string.IsNullOrWhiteSpace(CustomerEmail);
                     }
                     catch (Exception ex)
                     {
@@ -636,6 +728,12 @@ public partial class SaleViewModel : BaseViewModel
             else
             {
                 invoiceNumber = $"INV-{DateTime.Now:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
+            }
+
+            // Release stock reservations
+            if (_stockValidationService != null)
+            {
+                await _stockValidationService.ReleaseStockReservationAsync(_sessionId);
             }
 
             // Update customer after purchase if available (fire-and-forget)
@@ -657,17 +755,19 @@ public partial class SaleViewModel : BaseViewModel
             // Reset the form
             await ResetSale();
 
-            ErrorMessage = $"Sale completed! Invoice: {invoiceNumber}";
+            ShowMessage("✅", $"Sale completed! Invoice: {invoiceNumber}", "success");
             _logger?.LogInformation("Sale completed: {InvoiceNumber}", invoiceNumber);
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Error completing sale");
-            ErrorMessage = $"Error completing sale: {ex.Message}";
+            SetError($"Error completing sale: {ex.Message}");
         }
         finally
         {
-            IsBusy = false;
+            IsSaving = false;
+            IsProcessingSale = false;
+            BusyMessage = string.Empty;
         }
     }
 
@@ -687,6 +787,71 @@ public partial class SaleViewModel : BaseViewModel
     {
         // Trigger change calculation
         OnPropertyChanged(nameof(ChangeAmount));
+        UpdateCanCompleteSale();
+    }
+
+    partial void OnIsProcessingSaleChanged(bool value)
+    {
+        UpdateCanCompleteSale();
+    }
+
+    partial void OnIsSavingChanged(bool value)
+    {
+        UpdateCanCompleteSale();
+    }
+
+    /// <summary>
+    /// Recomputes CanCompleteSale based on current state.
+    /// A sale can be completed when: there are items, not already processing,
+    /// and (if cash payment) the amount received covers the total.
+    /// </summary>
+    private void UpdateCanCompleteSale()
+    {
+        var hasItems = SaleItems.Count > 0;
+        var notBusy = !IsProcessingSale && !IsSaving;
+        var paymentOk = SelectedPaymentMethod != Desktop.Models.PaymentMethod.Cash
+                        || AmountReceived >= Total;
+        CanCompleteSale = hasItems && notBusy && paymentOk;
+    }
+
+    [RelayCommand]
+    private async Task CancelSale()
+    {
+        if (IsBusy) return;
+
+        try
+        {
+            IsBusy = true;
+            BusyMessage = "Cancelling sale...";
+            ClearError();
+
+            // Release any stock reservations
+            if (_stockValidationService != null && _sessionId != Guid.Empty)
+            {
+                await _stockValidationService.ReleaseStockReservationAsync(_sessionId);
+            }
+
+            // Cancel via sale service if we have a persisted sale
+            if (_saleService != null && _currentSaleId.HasValue)
+            {
+                await _saleService.CancelSaleAsync(_currentSaleId.Value, "Cancelled by cashier");
+                _currentSaleId = null;
+            }
+
+            await ResetSale();
+            ShowMessage("❌", "Sale cancelled.", "warning");
+            _logger?.LogInformation("Sale cancelled for session {SessionId}", _sessionId);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error cancelling sale");
+            SetError($"Failed to cancel sale: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyMessage = string.Empty;
+        }
     }
 
     private void TriggerRealTimeCalculation()
@@ -943,7 +1108,12 @@ public partial class SaleViewModel : BaseViewModel
             LastScanTime = null;
             ScanStatus = "Ready";
 
+            // Reset receipt actions
+            CanPrintReceipt = false;
+            CanEmailReceipt = false;
+
             HasUnsavedChanges = false;
+            _currentSaleId = null;
 
             // Reset session state if multi-tab manager is available
             if (_salesManager != null)
@@ -955,6 +1125,7 @@ public partial class SaleViewModel : BaseViewModel
             }
             
             TriggerRealTimeCalculation();
+            UpdateCanCompleteSale();
             
             _logger?.LogDebug("Sale reset completed");
         }
@@ -1117,7 +1288,7 @@ public partial class SaleViewModel : BaseViewModel
         try
         {
             await SaveSessionAsync();
-            ShowMessage("💾", "Draft saved successfully.");
+            ShowMessage("💾", "Draft saved successfully.", "success");
         }
         catch (Exception ex)
         {
@@ -1139,7 +1310,7 @@ public partial class SaleViewModel : BaseViewModel
         {
             IsBusy = true;
             BusyMessage = "Loading draft...";
-            ShowMessage("📋", "No saved drafts found.");
+            ShowMessage("📋", "No saved drafts found.", "warning");
         }
         catch (Exception ex)
         {
@@ -1179,7 +1350,7 @@ public partial class SaleViewModel : BaseViewModel
         {
             IsBusy = true;
             BusyMessage = "Printing receipt...";
-            ShowMessage("🖨️", "Receipt sent to printer.");
+            ShowMessage("🖨️", "Receipt sent to printer.", "success");
         }
         catch (Exception ex)
         {
@@ -1206,7 +1377,7 @@ public partial class SaleViewModel : BaseViewModel
         {
             IsBusy = true;
             BusyMessage = "Sending receipt...";
-            ShowMessage("📧", $"Receipt emailed to {CustomerEmail}.");
+            ShowMessage("📧", $"Receipt emailed to {CustomerEmail}.", "success");
         }
         catch (Exception ex)
         {
@@ -1226,19 +1397,48 @@ public partial class SaleViewModel : BaseViewModel
         HasMessage = false;
         Message = string.Empty;
         MessageIcon = string.Empty;
+        _messageClearTimer?.Change(Timeout.Infinite, Timeout.Infinite);
     }
 
-    private void ShowMessage(string icon, string text)
+    private void ShowMessage(string icon, string text, string type = "success", int autoClearMs = 5000)
     {
         MessageIcon = icon;
         Message = text;
+        MessageType = type;
         HasMessage = true;
+
+        // Schedule auto-clear after the specified delay
+        if (autoClearMs > 0)
+        {
+            _messageClearTimer?.Change(autoClearMs, Timeout.Infinite);
+        }
+    }
+
+    private void ClearMessageCallback(object? state)
+    {
+        var sync = SynchronizationContext.Current;
+        if (sync != null)
+        {
+            sync.Post(_ =>
+            {
+                HasMessage = false;
+                Message = string.Empty;
+                MessageIcon = string.Empty;
+            }, null);
+        }
+        else
+        {
+            HasMessage = false;
+            Message = string.Empty;
+            MessageIcon = string.Empty;
+        }
     }
 
     // Cleanup method
     public void Cleanup()
     {
         _calculationTimer?.Dispose();
+        _messageClearTimer?.Dispose();
         _calculationCancellationToken?.Cancel();
         _calculationCancellationToken?.Dispose();
         
