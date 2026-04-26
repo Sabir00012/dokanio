@@ -100,9 +100,8 @@ public partial class AIInventoryViewModel : BaseViewModel
         Title = "AI Inventory Management";
     }
 
-    public bool CanManageInventory => _currentUserService.CurrentUser?.Role == UserRole.BusinessOwner ||
-                                      _currentUserService.CurrentUser?.Role == UserRole.ShopManager ||
-                                      _currentUserService.CurrentUser?.Role == UserRole.InventoryStaff;
+    public bool CanManageInventory => _currentUserService.CurrentUser != null &&
+                                      _authorizationService.CanManageInventory(_currentUserService.CurrentUser);
 
     [RelayCommand]
     private async Task LoadBusinessesAsync()

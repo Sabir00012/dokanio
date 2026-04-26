@@ -10,26 +10,36 @@ public class CurrentUserService : ICurrentUserService
 {
     private User? _currentUser;
     private UserSession? _currentSession;
+    private UserPermissions? _currentPermissions;
     private readonly ISessionService _sessionService;
+    private readonly IAuthorizationService _authorizationService;
     private readonly Guid _deviceId;
 
-    public CurrentUserService(ISessionService sessionService)
+    public CurrentUserService(ISessionService sessionService, IAuthorizationService authorizationService)
     {
         _sessionService = sessionService;
+        _authorizationService = authorizationService;
         _deviceId = Guid.NewGuid(); // In a real implementation, this would come from device configuration
     }
 
     public User? CurrentUser => _currentUser;
     public UserSession? CurrentSession => _currentSession;
+    public UserPermissions? CurrentPermissions => _currentPermissions;
     public bool IsAuthenticated => _currentUser != null && _currentSession != null;
 
     public event EventHandler<AuthenticationStateChangedEventArgs>? AuthenticationStateChanged;
 
     public void SetCurrentUser(User user, UserSession session)
     {
+        SetCurrentUser(user, session, BuildPermissions(user));
+    }
+
+    public void SetCurrentUser(User user, UserSession session, UserPermissions permissions)
+    {
         var wasAuthenticated = IsAuthenticated;
         _currentUser = user;
         _currentSession = session;
+        _currentPermissions = permissions;
 
         if (!wasAuthenticated || _currentUser?.Id != user.Id)
         {
@@ -48,6 +58,7 @@ public class CurrentUserService : ICurrentUserService
         
         _currentUser = null;
         _currentSession = null;
+        _currentPermissions = null;
 
         if (wasAuthenticated)
         {
@@ -57,6 +68,12 @@ public class CurrentUserService : ICurrentUserService
                 IsAuthenticated = false
             });
         }
+    }
+
+    public bool HasPermission(AuditAction action)
+    {
+        if (_currentUser == null) return false;
+        return _authorizationService.HasPermission(_currentUser, action);
     }
 
     public async Task UpdateActivityAsync()
@@ -84,4 +101,21 @@ public class CurrentUserService : ICurrentUserService
     public string? GetUsername() => _currentUser?.Username;
 
     public UserRole GetUserRole() => _currentUser?.Role ?? UserRole.Cashier;
+
+    private UserPermissions BuildPermissions(User user)
+    {
+        var permissions = new UserPermissions
+        {
+            UserId = user.Id,
+            Role = user.Role,
+            BusinessId = user.BusinessId,
+            ShopId = user.ShopId
+        };
+
+        var roleActions = _authorizationService.GetRolePermissions(user.Role);
+        foreach (var action in roleActions)
+            permissions.Permissions.Add(action.ToString());
+
+        return permissions;
+    }
 }

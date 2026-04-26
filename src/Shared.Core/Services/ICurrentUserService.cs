@@ -17,6 +17,11 @@ public interface ICurrentUserService
     /// Gets the current user session
     /// </summary>
     UserSession? CurrentSession { get; }
+
+    /// <summary>
+    /// Gets the current user's resolved permissions
+    /// </summary>
+    UserPermissions? CurrentPermissions { get; }
     
     /// <summary>
     /// Sets the current authenticated user and session
@@ -24,6 +29,11 @@ public interface ICurrentUserService
     /// <param name="user">The authenticated user</param>
     /// <param name="session">The user session</param>
     void SetCurrentUser(User user, UserSession session);
+
+    /// <summary>
+    /// Sets the current authenticated user, session, and resolved permissions
+    /// </summary>
+    void SetCurrentUser(User user, UserSession session, UserPermissions permissions);
     
     /// <summary>
     /// Clears the current user context
@@ -75,6 +85,11 @@ public interface ICurrentUserService
     /// </summary>
     /// <returns>User role</returns>
     UserRole GetUserRole();
+
+    /// <summary>
+    /// Checks if the current user has a specific permission
+    /// </summary>
+    bool HasPermission(AuditAction action);
 }
 
 /// <summary>

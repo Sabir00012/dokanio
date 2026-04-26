@@ -118,6 +118,9 @@ public partial class MainViewModel : BaseViewModel
         
         LoadUserContext();
         _ = LoadDashboardData();
+
+        // Start session expiry check — runs every 5 minutes
+        _ = StartSessionExpiryMonitorAsync();
     }
 
     // Parameterless constructor for design-time support
@@ -144,9 +147,10 @@ public partial class MainViewModel : BaseViewModel
 
     public bool IsBusinessOwner => CurrentUserRole == UserRole.BusinessOwner;
     public bool IsShopManager => CurrentUserRole == UserRole.ShopManager;
-    public bool CanManageUsers => IsBusinessOwner || IsShopManager;
-    public bool CanViewReports => IsBusinessOwner || IsShopManager;
-    public bool CanManageInventory => CurrentUserRole != UserRole.Cashier;
+    public bool CanManageUsers => _currentUserService?.HasPermission(AuditAction.ChangeUserRole) == true;
+    public bool CanViewReports => _currentUserService?.HasPermission(AuditAction.AccessReports) == true;
+    public bool CanManageInventory => _currentUserService?.HasPermission(AuditAction.UpdateInventory) == true
+                                   || _currentUserService?.HasPermission(AuditAction.CreateProduct) == true;
 
     [RelayCommand]
     private async Task LoadBusinessesAsync()
@@ -296,10 +300,51 @@ public partial class MainViewModel : BaseViewModel
         {
             CurrentUser = user.FullName ?? user.Username;
             CurrentUserRole = user.Role;
+
+            // Notify UI that permission-based properties may have changed
+            OnPropertyChanged(nameof(CanManageUsers));
+            OnPropertyChanged(nameof(CanViewReports));
+            OnPropertyChanged(nameof(CanManageInventory));
+            OnPropertyChanged(nameof(IsBusinessOwner));
+            OnPropertyChanged(nameof(IsShopManager));
             
             if (IsBusinessOwner)
             {
                 _ = LoadBusinessesAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Raised when the session expires so the UI can redirect to the login screen.
+    /// </summary>
+    public event EventHandler? SessionExpired;
+
+    private async Task StartSessionExpiryMonitorAsync()
+    {
+        if (_currentUserService == null) return;
+
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(5));
+        while (await timer.WaitForNextTickAsync())
+        {
+            if (!_currentUserService.IsAuthenticated) break;
+
+            try
+            {
+                var expired = await _currentUserService.IsSessionExpiredAsync();
+                if (expired)
+                {
+                    _currentUserService.ClearCurrentUser();
+                    SessionExpired?.Invoke(this, EventArgs.Empty);
+                    break;
+                }
+
+                // Keep session alive while user is active
+                await _currentUserService.UpdateActivityAsync();
+            }
+            catch
+            {
+                // Don't crash the monitor on transient errors
             }
         }
     }

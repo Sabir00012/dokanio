@@ -156,42 +156,6 @@
                 </Style>
               </Button.Styles>
             </Button>
-            
-            <!-- Demo Credentials Info -->
-            <Border Background="{DynamicResource PrimaryLightBrush}"
-                    CornerRadius="6"
-                    Padding="16,12"
-                    MaxWidth="400"
-                    HorizontalAlignment="Center">
-              <StackPanel Spacing="8">
-                <TextBlock Text="Demo Credentials:" 
-                           FontWeight="SemiBold"
-                           FontSize="14"
-                           HorizontalAlignment="Center"/>
-                <Grid>
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                  </Grid.ColumnDefinitions>
-                  
-                  <StackPanel Grid.Column="0" Spacing="4">
-                    <TextBlock Text="Admin:" FontWeight="Medium" FontSize="12"/>
-                    <TextBlock Text="admin / admin123" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                  </StackPanel>
-                  
-                  <StackPanel Grid.Column="1" Spacing="4">
-                    <TextBlock Text="Manager:" FontWeight="Medium" FontSize="12"/>
-                    <TextBlock Text="manager / manager123" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                  </StackPanel>
-                  
-                  <StackPanel Grid.Column="2" Spacing="4">
-                    <TextBlock Text="Cashier:" FontWeight="Medium" FontSize="12"/>
-                    <TextBlock Text="cashier / cashier123" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                  </StackPanel>
-                </Grid>
-              </StackPanel>
-            </Border>
           </StackPanel>
         </Border>
       </Grid>
