@@ -56,6 +56,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IInventoryUpdater, InventoryUpdater>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IDiscountManagementService, DiscountManagementService>();
         
         // Register device context service
         services.AddSingleton<IDeviceContextService, DeviceContextService>();
@@ -153,6 +154,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPerformanceMonitoringService, PerformanceMonitoringService>();
         services.AddScoped<ISystemMonitoringService, SystemMonitoringService>();
         services.AddScoped<IEnhancedPerformanceMonitoringService, EnhancedPerformanceMonitoringService>();
+        
+        // Register sales caching and concurrency services (Requirements 9.1, 9.4, 9.5)
+        services.AddMemoryCache();
+        services.AddScoped<ISalesCacheService, SalesCacheService>();
+        services.AddSingleton<ConcurrentSaleOperationGuard>();
+        
+        // Register audit logging service (Requirements 10.1, 10.2, 10.3, 10.6)
+        services.AddScoped<ISaleAuditLogRepository, SaleAuditLogRepository>();
+        services.AddScoped<IAuditLoggingService, AuditLoggingService>();
         
         // Register background services
         services.AddHostedService<SessionCleanupService>();
@@ -331,6 +341,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPerformanceMonitoringService, PerformanceMonitoringService>();
         services.AddScoped<ISystemMonitoringService, SystemMonitoringService>();
         services.AddScoped<IEnhancedPerformanceMonitoringService, EnhancedPerformanceMonitoringService>();
+        
+        // Register sales caching and concurrency services (Requirements 9.1, 9.4, 9.5)
+        services.AddMemoryCache();
+        services.AddScoped<ISalesCacheService, SalesCacheService>();
+        services.AddSingleton<ConcurrentSaleOperationGuard>();
+        
+        // Register audit logging service (Requirements 10.1, 10.2, 10.3, 10.6)
+        services.AddScoped<ISaleAuditLogRepository, SaleAuditLogRepository>();
+        services.AddScoped<IAuditLoggingService, AuditLoggingService>();
         
         services.AddScoped<IAuthenticationService>(provider => new AuthenticationService(
             provider.GetRequiredService<IUserRepository>(),

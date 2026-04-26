@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Shared.Core.Data;
+using Shared.Core.DTOs;
 using Shared.Core.Entities;
 using Shared.Core.Enums;
 
@@ -233,34 +234,6 @@ public class SaleRepository : Repository<Sale>, ISaleRepository
     }
 
     /// <summary>
-    /// Gets sales count for a specific date from Local_Storage
-    /// </summary>
-    public async Task<int> GetDailySalesCountAsync(DateTime date)
-    {
-        try
-        {
-            _logger.LogDebug("Getting daily sales count for date {Date} from Local_Storage", date.Date);
-            
-            var startOfDay = date.Date;
-            var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
-            
-            // Local-first: Query Local_Storage only
-            var dailyCount = await _dbSet
-                .Where(s => s.CreatedAt >= startOfDay && s.CreatedAt <= endOfDay)
-                .CountAsync();
-            
-            _logger.LogDebug("Daily sales count for {Date}: {Count} from Local_Storage", date.Date, dailyCount);
-            
-            return dailyCount;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting daily sales count for date {Date} from Local_Storage", date.Date);
-            throw;
-        }
-    }
-
-    /// <summary>
     /// Gets all sales within a date range for a specific shop from Local_Storage
     /// </summary>
     public async Task<IEnumerable<Sale>> GetSalesByShopAndDateRangeAsync(Guid shopId, DateTime from, DateTime to)
@@ -315,6 +288,195 @@ public class SaleRepository : Repository<Sale>, ISaleRepository
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting sales for shop {ShopId} from Local_Storage", shopId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Returns a paginated page of sale history with optional filters.
+    /// Uses AsNoTracking for read-only performance (Requirement 9.6).
+    /// </summary>
+    public async Task<PagedResult<Sale>> GetSaleHistoryPagedAsync(
+        DateTime from,
+        DateTime to,
+        Guid? shopId = null,
+        SaleStatus? status = null,
+        int page = 0,
+        int pageSize = 20)
+    {
+        if (page < 0) page = 0;
+        pageSize = Math.Clamp(pageSize, 1, 200);
+
+        try
+        {
+            _logger.LogDebug(
+                "Getting paged sale history: from={From}, to={To}, shopId={ShopId}, status={Status}, page={Page}, pageSize={PageSize}",
+                from, to, shopId, status, page, pageSize);
+
+            var startDate = from.Date;
+            var endDate   = to.Date.AddDays(1).AddTicks(-1);
+
+            // Build the base query with AsNoTracking for read-only performance
+            var query = _dbSet
+                .AsNoTracking()
+                .Where(s => s.CreatedAt >= startDate && s.CreatedAt <= endDate);
+
+            if (shopId.HasValue)
+                query = query.Where(s => s.ShopId == shopId.Value);
+
+            if (status.HasValue)
+                query = query.Where(s => s.Status == status.Value);
+
+            // Get total count before pagination
+            var totalCount = await query.CountAsync();
+
+            // Fetch the page with Include for navigation properties
+            var items = await query
+                .OrderByDescending(s => s.CreatedAt)
+                .Skip(page * pageSize)
+                .Take(pageSize)
+                .Include(s => s.Items)
+                .ToListAsync();
+
+            _logger.LogDebug(
+                "Paged sale history: returned {Count}/{Total} items (page {Page})",
+                items.Count, totalCount, page);
+
+            return PagedResult<Sale>.Create(items, totalCount, page, pageSize);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting paged sale history from Local_Storage");
+            throw;
+        }
+    }
+
+    // ── Enhanced query methods (Requirement 9.3) ──────────────────────────────
+
+    /// <summary>
+    /// Gets all active (Draft or Active status) sales, optionally filtered by shop.
+    /// Uses AsNoTracking for read-only performance (Requirement 9.3).
+    /// </summary>
+    public async Task<IEnumerable<Sale>> GetActiveSalesAsync(Guid? shopId = null)
+    {
+        try
+        {
+            _logger.LogDebug("Getting active sales from Local_Storage (shopId={ShopId})", shopId);
+
+            var query = _dbSet
+                .AsNoTracking()
+                .Where(s => s.Status == SaleStatus.Draft || s.Status == SaleStatus.Active);
+
+            if (shopId.HasValue)
+                query = query.Where(s => s.ShopId == shopId.Value);
+
+            var activeSales = await query
+                .OrderByDescending(s => s.UpdatedAt)
+                .Include(s => s.Items)
+                .ToListAsync();
+
+            _logger.LogDebug("Found {Count} active sales in Local_Storage", activeSales.Count);
+            return activeSales;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting active sales from Local_Storage");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Gets all sales for a specific customer, ordered by most recent first.
+    /// Uses AsNoTracking for read-only performance (Requirement 9.3).
+    /// </summary>
+    public async Task<IEnumerable<Sale>> GetSalesByCustomerAsync(Guid customerId, int limit = 50)
+    {
+        if (limit <= 0) limit = 50;
+        limit = Math.Min(limit, 500); // cap to prevent runaway queries
+
+        try
+        {
+            _logger.LogDebug("Getting sales for customer {CustomerId} (limit={Limit}) from Local_Storage", customerId, limit);
+
+            var sales = await _dbSet
+                .AsNoTracking()
+                .Where(s => s.CustomerId == customerId && s.Status == SaleStatus.Completed)
+                .OrderByDescending(s => s.CreatedAt)
+                .Take(limit)
+                .Include(s => s.Items)
+                .ToListAsync();
+
+            _logger.LogDebug("Found {Count} sales for customer {CustomerId} in Local_Storage", sales.Count, customerId);
+            return sales;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting sales for customer {CustomerId} from Local_Storage", customerId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Gets the total sales amount for a specific date and optional shop from Local_Storage.
+    /// Only counts completed sales (Requirement 9.3).
+    /// </summary>
+    public async Task<decimal> GetDailySalesAmountAsync(DateTime date, Guid? shopId = null)
+    {
+        try
+        {
+            _logger.LogDebug("Getting daily sales amount for date {Date} (shopId={ShopId}) from Local_Storage", date.Date, shopId);
+
+            var startOfDay = date.Date;
+            var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
+
+            var query = _dbSet
+                .AsNoTracking()
+                .Where(s => s.CreatedAt >= startOfDay && s.CreatedAt <= endOfDay
+                         && s.Status == SaleStatus.Completed);
+
+            if (shopId.HasValue)
+                query = query.Where(s => s.ShopId == shopId.Value);
+
+            var total = await query.SumAsync(s => s.FinalTotal > 0 ? s.FinalTotal : s.TotalAmount);
+
+            _logger.LogDebug("Daily sales amount for {Date}: {Total} from Local_Storage", date.Date, total);
+            return total;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting daily sales amount for date {Date} from Local_Storage", date.Date);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Gets the count of completed sales for a specific date and optional shop from Local_Storage.
+    /// </summary>
+    public async Task<int> GetDailySalesCountAsync(DateTime date, Guid? shopId = null)
+    {
+        try
+        {
+            _logger.LogDebug("Getting daily sales count for date {Date} (shopId={ShopId}) from Local_Storage", date.Date, shopId);
+
+            var startOfDay = date.Date;
+            var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
+
+            var query = _dbSet
+                .AsNoTracking()
+                .Where(s => s.CreatedAt >= startOfDay && s.CreatedAt <= endOfDay
+                         && s.Status == SaleStatus.Completed);
+
+            if (shopId.HasValue)
+                query = query.Where(s => s.ShopId == shopId.Value);
+
+            var count = await query.CountAsync();
+
+            _logger.LogDebug("Daily sales count for {Date}: {Count} from Local_Storage", date.Date, count);
+            return count;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting daily sales count for date {Date} from Local_Storage", date.Date);
             throw;
         }
     }

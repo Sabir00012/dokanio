@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using Shared.Core.Data;
 using Shared.Core.Entities;
@@ -61,6 +62,36 @@ public class AuditLogRepository : IAuditLogRepository
     public async Task<int> SaveChangesAsync()
     {
         return await _context.SaveChangesAsync();
+    }
+
+    // ── Transaction support (Requirement 9.3) ─────────────────────────────────
+
+    public Task<IDbContextTransaction> BeginTransactionAsync()
+        => _context.Database.BeginTransactionAsync();
+
+    public async Task<TResult> ExecuteInTransactionAsync<TResult>(Func<Task<TResult>> operation)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var result = await operation();
+                await tx.CommitAsync();
+                return result;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        });
+    }
+
+    public async Task ExecuteInTransactionAsync(Func<Task> operation)
+    {
+        await ExecuteInTransactionAsync(async () => { await operation(); return true; });
     }
 
     public async Task<IEnumerable<AuditLog>> GetByUserIdAsync(Guid userId, DateTime? from = null, DateTime? to = null)

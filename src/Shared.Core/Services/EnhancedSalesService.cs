@@ -35,11 +35,14 @@ public class EnhancedSalesService : SaleService, IEnhancedSalesService
         ICurrentUserService currentUserService,
         PosDbContext context,
         ILogger<EnhancedSalesService> logger,
-        IValidationService validationService)
+        IValidationService validationService,
+        ISalesCacheService salesCache,
+        ConcurrentSaleOperationGuard operationGuard,
+        IAuditLoggingService auditLogging)
         : base(saleRepository, saleItemRepository, productService, inventoryService, 
                weightBasedPricingService, membershipService, discountService, 
                configurationService, licenseService, userRepository, authorizationService, shopRepository, context, logger,
-               validationService)
+               validationService, salesCache, operationGuard, auditLogging)
     {
         _businessManagementService = businessManagementService;
         _currentUserService = currentUserService;

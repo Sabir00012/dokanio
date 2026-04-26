@@ -25,6 +25,8 @@ public class PosDbContext : DbContext
     public DbSet<CustomerPreference> CustomerPreferences { get; set; } = null!;
     public DbSet<Discount> Discounts { get; set; } = null!;
     public DbSet<SaleDiscount> SaleDiscounts { get; set; } = null!;
+    public DbSet<SalePayment> SalePayments { get; set; } = null!;
+    public DbSet<SaleItemDiscount> SaleItemDiscounts { get; set; } = null!;
     public DbSet<Supplier> Suppliers { get; set; } = null!;
     public DbSet<TransactionLogEntry> TransactionLogs { get; set; } = null!;
     public DbSet<User> Users { get; set; } = null!;
@@ -33,6 +35,7 @@ public class PosDbContext : DbContext
     public DbSet<SystemLogEntry> SystemLogs { get; set; } = null!;
     public DbSet<Configuration> Configurations { get; set; } = null!;
     public DbSet<License> Licenses { get; set; } = null!;
+    public DbSet<SaleAuditLog> SaleAuditLogs { get; set; } = null!;
 
     public PosDbContext(DbContextOptions<PosDbContext> options) : base(options)
     {
@@ -78,6 +81,9 @@ public class PosDbContext : DbContext
         ConfigureSoftDelete<User>(modelBuilder);
         ConfigureSoftDelete<Configuration>(modelBuilder);
         ConfigureSoftDelete<License>(modelBuilder);
+        ConfigureSoftDelete<SaleAuditLog>(modelBuilder);
+        ConfigureSoftDelete<SaleDiscount>(modelBuilder);
+        ConfigureSoftDelete<SalePayment>(modelBuilder);
 
         // TransactionLogEntry configuration (not soft deletable)
         modelBuilder.Entity<TransactionLogEntry>(entity =>
@@ -220,6 +226,10 @@ public class PosDbContext : DbContext
             entity.HasIndex(e => e.DeviceId);
             entity.HasIndex(e => e.CustomerId);
             
+            // Index on Status for filtering active/completed/cancelled sales (Requirement 9.3)
+            entity.HasIndex(e => e.Status)
+                  .HasDatabaseName("IX_Sale_Status");
+            
             // Performance optimization: Composite indexes for common query patterns
             entity.HasIndex(e => new { e.ShopId, e.CreatedAt, e.IsDeleted })
                   .HasDatabaseName("IX_Sale_Shop_Created_NotDeleted");
@@ -238,6 +248,12 @@ public class PosDbContext : DbContext
             entity.Property(e => e.DiscountAmount).HasPrecision(10, 2);
             entity.Property(e => e.TaxAmount).HasPrecision(10, 2);
             entity.Property(e => e.MembershipDiscountAmount).HasPrecision(10, 2);
+            entity.Property(e => e.Subtotal).HasPrecision(10, 2);
+            entity.Property(e => e.TotalDiscount).HasPrecision(10, 2);
+            entity.Property(e => e.TotalTax).HasPrecision(10, 2);
+            entity.Property(e => e.FinalTotal).HasPrecision(10, 2);
+            entity.Property(e => e.AmountPaid).HasPrecision(10, 2);
+            entity.Property(e => e.ChangeAmount).HasPrecision(10, 2);
             entity.Property(e => e.CancellationReason).HasMaxLength(500);
             
             // Convert enums to integers for SQLite
@@ -271,10 +287,22 @@ public class PosDbContext : DbContext
             entity.HasIndex(e => e.SaleId);
             entity.HasIndex(e => e.ProductId);
             
+            // Index on BatchNumber for batch-tracked product lookups (Requirement 7.4)
+            entity.HasIndex(e => e.BatchNumber)
+                  .HasDatabaseName("IX_SaleItem_BatchNumber")
+                  .HasFilter("BatchNumber IS NOT NULL");
+            
             entity.Property(e => e.UnitPrice).HasPrecision(10, 2);
             entity.Property(e => e.TotalPrice).HasPrecision(10, 2);
+            entity.Property(e => e.LineSubtotal).HasPrecision(10, 2);
+            entity.Property(e => e.LineDiscount).HasPrecision(10, 2);
+            entity.Property(e => e.LineTax).HasPrecision(10, 2);
+            entity.Property(e => e.LineTotal).HasPrecision(10, 2);
             entity.Property(e => e.Weight).HasPrecision(10, 3);
             entity.Property(e => e.RatePerKilogram).HasPrecision(10, 2);
+            entity.Property(e => e.ProductName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.ProductCode).HasMaxLength(50);
+            entity.Property(e => e.Barcode).HasMaxLength(50);
             entity.Property(e => e.BatchNumber).HasMaxLength(50);
             
             // Foreign key relationships with proper constraints
@@ -571,12 +599,27 @@ public class PosDbContext : DbContext
         modelBuilder.Entity<SaleDiscount>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.HasIndex(e => e.SaleId);
-            entity.HasIndex(e => e.DiscountId);
-            entity.HasIndex(e => e.AppliedAt);
             
-            entity.Property(e => e.DiscountAmount).HasPrecision(10, 2);
-            entity.Property(e => e.DiscountReason).IsRequired().HasMaxLength(200);
+            // Index on SaleId for fast discount lookups per sale (Requirement 10.4)
+            entity.HasIndex(e => e.SaleId)
+                  .HasDatabaseName("IX_SaleDiscount_SaleId");
+            entity.HasIndex(e => e.DiscountId)
+                  .HasDatabaseName("IX_SaleDiscount_DiscountId")
+                  .HasFilter("DiscountId IS NOT NULL");
+            entity.HasIndex(e => e.AppliedAt)
+                  .HasDatabaseName("IX_SaleDiscount_AppliedAt");
+            entity.HasIndex(e => e.DiscountType)
+                  .HasDatabaseName("IX_SaleDiscount_DiscountType");
+            
+            entity.Property(e => e.DiscountName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.DiscountReason).HasMaxLength(500);
+            entity.Property(e => e.PercentageValue).HasPrecision(5, 2);
+            entity.Property(e => e.FixedAmount).HasPrecision(10, 2);
+            entity.Property(e => e.CalculatedAmount).HasPrecision(10, 2);
+            
+            // Convert enums to integers for SQLite
+            entity.Property(e => e.DiscountType).HasConversion<int>();
+            entity.Property(e => e.SyncStatus).HasConversion<int>();
             
             // Foreign key relationships
             entity.HasOne(e => e.Sale)
@@ -588,6 +631,63 @@ public class PosDbContext : DbContext
                   .WithMany(d => d.SaleDiscounts)
                   .HasForeignKey(e => e.DiscountId)
                   .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // SalePayment configuration
+        modelBuilder.Entity<SalePayment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            
+            // Index on SaleId for fast payment lookups per sale (Requirement 10.5)
+            entity.HasIndex(e => e.SaleId)
+                  .HasDatabaseName("IX_SalePayment_SaleId");
+            entity.HasIndex(e => e.Status)
+                  .HasDatabaseName("IX_SalePayment_Status");
+            entity.HasIndex(e => new { e.SaleId, e.Status })
+                  .HasDatabaseName("IX_SalePayment_SaleId_Status");
+            
+            entity.Property(e => e.Amount).HasPrecision(10, 2);
+            entity.Property(e => e.AmountTendered).HasPrecision(10, 2);
+            entity.Property(e => e.ChangeAmount).HasPrecision(10, 2);
+            entity.Property(e => e.FailureReason).HasMaxLength(500);
+            entity.Property(e => e.ReferenceNumber).HasMaxLength(100);
+            
+            // Convert enums to integers for SQLite
+            entity.Property(e => e.PaymentMethod).HasConversion<int>();
+            entity.Property(e => e.Status).HasConversion<int>();
+            entity.Property(e => e.SyncStatus).HasConversion<int>();
+            
+            // Foreign key relationship
+            entity.HasOne(e => e.Sale)
+                  .WithMany(s => s.Payments)
+                  .HasForeignKey(e => e.SaleId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // SaleItemDiscount configuration
+        modelBuilder.Entity<SaleItemDiscount>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            
+            entity.HasIndex(e => e.SaleItemId)
+                  .HasDatabaseName("IX_SaleItemDiscount_SaleItemId");
+            entity.HasIndex(e => e.SaleDiscountId)
+                  .HasDatabaseName("IX_SaleItemDiscount_SaleDiscountId");
+            entity.HasIndex(e => new { e.SaleItemId, e.SaleDiscountId })
+                  .HasDatabaseName("IX_SaleItemDiscount_SaleItemId_SaleDiscountId");
+            
+            entity.Property(e => e.DiscountAmount).HasPrecision(10, 2);
+            
+            // Foreign key relationships
+            entity.HasOne(e => e.SaleItem)
+                  .WithMany(si => si.AppliedDiscounts)
+                  .HasForeignKey(e => e.SaleItemId)
+                  .OnDelete(DeleteBehavior.Cascade);
+                  
+            entity.HasOne(e => e.SaleDiscount)
+                  .WithMany(sd => sd.SaleItemDiscounts)
+                  .HasForeignKey(e => e.SaleDiscountId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // AuditLog configuration
@@ -679,6 +779,32 @@ public class PosDbContext : DbContext
             // Convert enums to integers for SQLite
             entity.Property(e => e.Type).HasConversion<int>();
             entity.Property(e => e.SyncStatus).HasConversion<int>();
+        });
+
+        // SaleAuditLog configuration
+        modelBuilder.Entity<SaleAuditLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            // Indexes for efficient querying by sale, user, and timestamp (Requirement 10.1–10.3)
+            entity.HasIndex(e => e.SaleId)
+                  .HasDatabaseName("IX_SaleAuditLog_SaleId");
+            entity.HasIndex(e => e.UserId)
+                  .HasDatabaseName("IX_SaleAuditLog_UserId");
+            entity.HasIndex(e => e.Timestamp)
+                  .HasDatabaseName("IX_SaleAuditLog_Timestamp");
+
+            // Composite indexes for common query patterns
+            entity.HasIndex(e => new { e.SaleId, e.Timestamp })
+                  .HasDatabaseName("IX_SaleAuditLog_Sale_Timestamp");
+            entity.HasIndex(e => new { e.UserId, e.Timestamp })
+                  .HasDatabaseName("IX_SaleAuditLog_User_Timestamp");
+
+            entity.Property(e => e.EventDescription).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.IpAddress).HasMaxLength(45);
+
+            // Store enum as integer for SQLite compatibility
+            entity.Property(e => e.EventType).HasConversion<int>();
         });
 
         // License configuration (not soft deletable)

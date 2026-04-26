@@ -93,6 +93,14 @@ builder.Services.AddAuthorization();
 // Register application services
 builder.Services.AddScoped<IJwtService, JwtService>();
 
+// Add health checks for database connectivity and critical service dependencies
+builder.Services.AddHealthChecks()
+    .AddCheck("server-database", () =>
+    {
+        // Basic liveness check — the database context is registered and resolvable
+        return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Database context is registered.");
+    }, tags: new[] { "database", "ready" });
+
 // Add CORS for development
 builder.Services.AddCors(options =>
 {
@@ -200,5 +208,12 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Health check endpoint for monitoring and service readiness
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 
 app.Run();

@@ -12,6 +12,12 @@ namespace Shared.Core.Services;
 /// Production-ready sale service implementing complete sale lifecycle management.
 /// Handles sale creation with unique invoice number generation, device/user validation,
 /// item management, calculations, and state transitions.
+///
+/// Performance features (Requirements 9.1, 9.4, 9.5):
+/// - <see cref="ISalesCacheService"/> caches active sales, products, and tax rates to
+///   eliminate redundant DB round-trips on hot-path operations.
+/// - <see cref="ConcurrentSaleOperationGuard"/> serialises mutations on the same sale ID
+///   so concurrent requests never corrupt sale state.
 /// </summary>
 public class SaleService : ISaleService
 {
@@ -31,6 +37,13 @@ public class SaleService : ISaleService
     protected readonly ILogger<SaleService> _logger;
     protected readonly IValidationService _validationService;
 
+    // Performance: cache + concurrency guard (Requirements 9.1, 9.4, 9.5)
+    private readonly ISalesCacheService _salesCache;
+    private readonly ConcurrentSaleOperationGuard _operationGuard;
+
+    // Audit logging (Requirements 10.1, 10.2, 10.3)
+    private readonly IAuditLoggingService _auditLogging;
+
     public SaleService(
         ISaleRepository saleRepository,
         ISaleItemRepository saleItemRepository,
@@ -46,7 +59,10 @@ public class SaleService : ISaleService
         IShopRepository shopRepository,
         PosDbContext context,
         ILogger<SaleService> logger,
-        IValidationService validationService)
+        IValidationService validationService,
+        ISalesCacheService salesCache,
+        ConcurrentSaleOperationGuard operationGuard,
+        IAuditLoggingService auditLogging)
     {
         _saleRepository = saleRepository;
         _saleItemRepository = saleItemRepository;
@@ -63,6 +79,9 @@ public class SaleService : ISaleService
         _context = context;
         _logger = logger;
         _validationService = validationService;
+        _salesCache = salesCache ?? throw new ArgumentNullException(nameof(salesCache));
+        _operationGuard = operationGuard ?? throw new ArgumentNullException(nameof(operationGuard));
+        _auditLogging = auditLogging ?? throw new ArgumentNullException(nameof(auditLogging));
     }
 
     // =========================================================================
@@ -279,6 +298,13 @@ public class SaleService : ISaleService
         _logger.LogInformation("Created sale {InvoiceNumber} (ID: {SaleId}) on device {DeviceId} for shop {ShopId}",
             sale.InvoiceNumber, sale.Id, deviceId, shopId);
 
+        // Requirement 10.1, 10.2: log sale creation with user info and timestamp
+        await _auditLogging.LogSaleEventAsync(
+            sale.Id, userId,
+            Enums.SaleAuditEventType.SaleCreated,
+            $"Sale {sale.InvoiceNumber} created on device {deviceId}",
+            deviceId: deviceId);
+
         return sale;
     }
 
@@ -356,6 +382,14 @@ public class SaleService : ISaleService
         _logger.LogInformation(
             "Created sale {InvoiceNumber} (ID: {SaleId}) for user {UserId} on device {DeviceId} for shop {ShopId}",
             sale.InvoiceNumber, sale.Id, userId, deviceId, shopId);
+
+        // Requirement 10.1, 10.2: log sale creation with user info and timestamp
+        await _auditLogging.LogSaleEventAsync(
+            sale.Id, userId,
+            Enums.SaleAuditEventType.SaleCreated,
+            $"Sale {sale.InvoiceNumber} created by user {userId}",
+            newValues: new { sale.InvoiceNumber, sale.ShopId, sale.CustomerId },
+            deviceId: deviceId);
 
         return sale;
     }
@@ -460,13 +494,29 @@ public class SaleService : ISaleService
 
     /// <summary>
     /// Gets a sale by its ID, including items and customer.
+    /// Results are served from the in-process cache when available (Requirement 9.4).
     /// </summary>
     public async Task<Sale?> GetSaleByIdAsync(Guid saleId)
     {
         if (saleId == Guid.Empty)
             throw new ArgumentException("Sale ID cannot be empty.", nameof(saleId));
 
-        return await _saleRepository.GetByIdAsync(saleId);
+        // Requirement 9.4: serve from cache to avoid redundant DB round-trips
+        var cached = await _salesCache.GetActiveSaleAsync(saleId);
+        if (cached != null)
+        {
+            _logger.LogDebug("Sale {SaleId} served from cache", saleId);
+            return cached;
+        }
+
+        var sale = await _saleRepository.GetByIdAsync(saleId);
+
+        // Cache active/draft sales only — completed/cancelled sales are immutable
+        // but don't need to stay in the hot-path cache
+        if (sale != null && (sale.Status == SaleStatus.Draft || sale.Status == SaleStatus.Active))
+            await _salesCache.SetActiveSaleAsync(sale);
+
+        return sale;
     }
 
     /// <summary>
@@ -488,8 +538,15 @@ public class SaleService : ISaleService
     /// Adds a regular (non-weight-based) product to a sale.
     /// Validates product eligibility, stock availability, and transitions sale to Active state.
     /// Requirement 1.5: Maintain sale state throughout transaction process.
+    /// Requirements 9.1, 9.5: Serialised via ConcurrentSaleOperationGuard; cache updated on success.
     /// </summary>
     public async Task<Sale> AddItemToSaleAsync(Guid saleId, Guid productId, int quantity, decimal unitPrice, string? batchNumber = null)
+    {
+        return await _operationGuard.ExecuteAsync(saleId, () =>
+            AddItemToSaleInternalAsync(saleId, productId, quantity, unitPrice, batchNumber));
+    }
+
+    private async Task<Sale> AddItemToSaleInternalAsync(Guid saleId, Guid productId, int quantity, decimal unitPrice, string? batchNumber)
     {
         // Requirement 8.2: validate all inputs before processing
         var validation = await _validationService.ValidateProductAdditionAsync(saleId, productId, quantity, batchNumber);
@@ -555,7 +612,17 @@ public class SaleService : ISaleService
         await _saleRepository.UpdateAsync(sale);
         await _saleRepository.SaveChangesAsync();
 
+        // Requirement 9.4: keep cache in sync after mutation
+        await _salesCache.SetActiveSaleAsync(sale);
+
         _logger.LogInformation("Added product {ProductId} (qty: {Quantity}) to sale {SaleId}", productId, quantity, saleId);
+
+        // Requirement 10.1, 10.2, 10.3: log item addition with change details
+        await _auditLogging.LogItemChangeAsync(
+            saleId, saleItem.Id, sale.UserId,
+            Enums.SaleAuditEventType.ItemAdded,
+            oldValues: null,
+            newValues: new { saleItem.ProductId, saleItem.Quantity, saleItem.UnitPrice, saleItem.TotalPrice });
 
         return sale;
     }
@@ -563,8 +630,15 @@ public class SaleService : ISaleService
     /// <summary>
     /// Adds a weight-based product to a sale with pricing calculated from weight.
     /// Requirement 1.5: Maintain sale state throughout transaction process.
+    /// Requirements 9.1, 9.5: Serialised via ConcurrentSaleOperationGuard; cache updated on success.
     /// </summary>
     public async Task<Sale> AddWeightBasedItemToSaleAsync(Guid saleId, Guid productId, decimal weight, string? batchNumber = null)
+    {
+        return await _operationGuard.ExecuteAsync(saleId, () =>
+            AddWeightBasedItemToSaleInternalAsync(saleId, productId, weight, batchNumber));
+    }
+
+    private async Task<Sale> AddWeightBasedItemToSaleInternalAsync(Guid saleId, Guid productId, decimal weight, string? batchNumber)
     {
         // Requirement 8.2: validate all inputs before processing
         var validation = await _validationService.ValidateWeightBasedProductAdditionAsync(saleId, productId, weight);
@@ -635,7 +709,17 @@ public class SaleService : ISaleService
         await _saleRepository.UpdateAsync(sale);
         await _saleRepository.SaveChangesAsync();
 
+        // Requirement 9.4: keep cache in sync after mutation
+        await _salesCache.SetActiveSaleAsync(sale);
+
         _logger.LogInformation("Added weight-based product {ProductId} ({Weight}kg) to sale {SaleId}", productId, roundedWeight, saleId);
+
+        // Requirement 10.1, 10.2, 10.3: log weight-based item addition
+        await _auditLogging.LogItemChangeAsync(
+            saleId, saleItem.Id, sale.UserId,
+            Enums.SaleAuditEventType.ItemAdded,
+            oldValues: null,
+            newValues: new { saleItem.ProductId, Weight = roundedWeight, saleItem.RatePerKilogram, saleItem.TotalPrice });
 
         return sale;
     }
@@ -644,8 +728,15 @@ public class SaleService : ISaleService
     /// Removes an item from a sale using soft-delete and recalculates the sale total.
     /// Transitions sale back to Draft if all items are removed.
     /// Requirement 2.6: Support removing items from sales with proper cleanup.
+    /// Requirements 9.1, 9.5: Serialised via ConcurrentSaleOperationGuard; cache updated on success.
     /// </summary>
     public async Task<Sale> RemoveItemFromSaleAsync(Guid saleId, Guid saleItemId)
+    {
+        return await _operationGuard.ExecuteAsync(saleId, () =>
+            RemoveItemFromSaleInternalAsync(saleId, saleItemId));
+    }
+
+    private async Task<Sale> RemoveItemFromSaleInternalAsync(Guid saleId, Guid saleItemId)
     {
         if (saleId == Guid.Empty)
             throw new ArgumentException("Sale ID cannot be empty.", nameof(saleId));
@@ -676,6 +767,13 @@ public class SaleService : ISaleService
         _logger.LogInformation("Removed item {SaleItemId} (product {ProductId}) from sale {SaleId}",
             saleItemId, itemToRemove.ProductId, saleId);
 
+        // Requirement 10.1, 10.2, 10.3: log item removal with snapshot of removed item
+        await _auditLogging.LogItemChangeAsync(
+            saleId, saleItemId, sale.UserId,
+            Enums.SaleAuditEventType.ItemRemoved,
+            oldValues: new { itemToRemove.ProductId, itemToRemove.Quantity, itemToRemove.UnitPrice, itemToRemove.TotalPrice },
+            newValues: null);
+
         // Recalculate sale total after removal
         sale.TotalAmount = await CalculateSaleTotalAsync(saleId);
         sale.UpdatedAt = DateTime.UtcNow;
@@ -691,6 +789,9 @@ public class SaleService : ISaleService
 
         await _saleRepository.UpdateAsync(sale);
         await _saleRepository.SaveChangesAsync();
+
+        // Requirement 9.4: keep cache in sync after mutation
+        await _salesCache.SetActiveSaleAsync(sale);
 
         return sale;
     }
@@ -765,6 +866,13 @@ public class SaleService : ISaleService
         _logger.LogInformation(
             "Updated weight for item {SaleItemId} in sale {SaleId}: {OldWeight}kg → {NewWeight}kg, new total: {NewTotal}",
             saleItemId, saleId, saleItem.Weight, roundedWeight, newTotalPrice);
+
+        // Requirement 10.1, 10.2, 10.3: log weight change with old and new values
+        await _auditLogging.LogItemChangeAsync(
+            saleId, saleItemId, sale.UserId,
+            Enums.SaleAuditEventType.ItemWeightChanged,
+            oldValues: new { Weight = saleItem.Weight, TotalPrice = saleItem.TotalPrice },
+            newValues: new { Weight = roundedWeight, TotalPrice = newTotalPrice });
 
         return sale;
     }
@@ -940,8 +1048,24 @@ public class SaleService : ISaleService
             await _membershipService.UpdateCustomerPurchaseHistoryAsync(trackedSale.Customer, trackedSale);
         }
 
+        // Requirement 9.4: evict from cache — completed sales are no longer in the hot path
+        await _salesCache.InvalidateActiveSaleAsync(trackedSale.Id);
+
         _logger.LogInformation("Completed sale {InvoiceNumber} (ID: {SaleId}), total: {Total}",
             trackedSale.InvoiceNumber, trackedSale.Id, trackedSale.TotalAmount);
+
+        // Requirement 10.1, 10.2: log sale completion with final totals
+        await _auditLogging.LogSaleEventAsync(
+            trackedSale.Id, trackedSale.UserId,
+            Enums.SaleAuditEventType.SaleCompleted,
+            $"Sale {trackedSale.InvoiceNumber} completed via {paymentMethod}",
+            newValues: new
+            {
+                trackedSale.TotalAmount,
+                trackedSale.DiscountAmount,
+                trackedSale.TaxAmount,
+                PaymentMethod = paymentMethod.ToString()
+            });
 
         return trackedSale;
     }
@@ -977,8 +1101,18 @@ public class SaleService : ISaleService
         await _saleRepository.UpdateAsync(sale);
         await _saleRepository.SaveChangesAsync();
 
+        // Requirement 9.4: evict from cache — cancelled sales are no longer in the hot path
+        await _salesCache.InvalidateActiveSaleAsync(saleId);
+
         _logger.LogInformation("Cancelled sale {InvoiceNumber} (ID: {SaleId}), reason: {Reason}",
             sale.InvoiceNumber, sale.Id, reason);
+
+        // Requirement 10.1, 10.2: log sale cancellation with reason
+        await _auditLogging.LogSaleEventAsync(
+            saleId, sale.UserId,
+            Enums.SaleAuditEventType.SaleCancelled,
+            $"Sale {sale.InvoiceNumber} cancelled: {reason}",
+            newValues: new { Reason = reason });
 
         return sale;
     }

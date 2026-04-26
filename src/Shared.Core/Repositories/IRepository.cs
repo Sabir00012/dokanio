@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System.Linq.Expressions;
 
 namespace Shared.Core.Repositories;
@@ -51,4 +53,29 @@ public interface IRepository<T> where T : class
     /// </summary>
     /// <returns>Number of affected records</returns>
     Task<int> SaveChangesAsync();
+
+    // ── Transaction support (Requirement 9.3) ─────────────────────────────────
+
+    /// <summary>
+    /// Begins a database transaction for multi-step operations that must succeed or fail atomically.
+    /// The caller is responsible for committing or rolling back the transaction.
+    /// </summary>
+    /// <returns>An <see cref="IDbContextTransaction"/> that must be disposed after use.</returns>
+    Task<IDbContextTransaction> BeginTransactionAsync();
+
+    /// <summary>
+    /// Executes <paramref name="operation"/> inside a database transaction.
+    /// Automatically commits on success and rolls back on any exception.
+    /// </summary>
+    /// <typeparam name="TResult">Return type of the operation.</typeparam>
+    /// <param name="operation">Async delegate to execute within the transaction.</param>
+    /// <returns>The value returned by <paramref name="operation"/>.</returns>
+    Task<TResult> ExecuteInTransactionAsync<TResult>(Func<Task<TResult>> operation);
+
+    /// <summary>
+    /// Executes <paramref name="operation"/> inside a database transaction (no return value).
+    /// Automatically commits on success and rolls back on any exception.
+    /// </summary>
+    /// <param name="operation">Async delegate to execute within the transaction.</param>
+    Task ExecuteInTransactionAsync(Func<Task> operation);
 }
