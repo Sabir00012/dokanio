@@ -1052,4 +1052,193 @@ public class ConfigurationService : IConfigurationService
             return false;
         }
     }
+
+    /// <summary>
+    /// Gets feature flag settings for gradual rollout
+    /// </summary>
+    /// <returns>Feature flag settings</returns>
+    public async Task<FeatureFlagSettings> GetFeatureFlagSettingsAsync()
+    {
+        return new FeatureFlagSettings
+        {
+            EnhancedRealTimeCalculations = await GetConfigurationAsync("FeatureFlag.EnhancedRealTimeCalculations", true),
+            AdvancedDiscountProcessing = await GetConfigurationAsync("FeatureFlag.AdvancedDiscountProcessing", true),
+            ImprovedWeightBasedPricing = await GetConfigurationAsync("FeatureFlag.ImprovedWeightBasedPricing", true),
+            EnhancedStockValidation = await GetConfigurationAsync("FeatureFlag.EnhancedStockValidation", true),
+            AdvancedPaymentProcessing = await GetConfigurationAsync("FeatureFlag.AdvancedPaymentProcessing", true),
+            RealTimeInventoryUpdates = await GetConfigurationAsync("FeatureFlag.RealTimeInventoryUpdates", true),
+            ComprehensiveAuditLogging = await GetConfigurationAsync("FeatureFlag.ComprehensiveAuditLogging", true),
+            PerformanceOptimizations = await GetConfigurationAsync("FeatureFlag.PerformanceOptimizations", true),
+            AdvancedErrorHandling = await GetConfigurationAsync("FeatureFlag.AdvancedErrorHandling", true),
+            EnhancedInputValidation = await GetConfigurationAsync("FeatureFlag.EnhancedInputValidation", true),
+            MultiCurrencySupport = await GetConfigurationAsync("FeatureFlag.MultiCurrencySupport", false),
+            AdvancedTaxCalculations = await GetConfigurationAsync("FeatureFlag.AdvancedTaxCalculations", false),
+            BulkOperationsSupport = await GetConfigurationAsync("FeatureFlag.BulkOperationsSupport", false),
+            AdvancedReporting = await GetConfigurationAsync("FeatureFlag.AdvancedReporting", false),
+            AIPoweredRecommendations = await GetConfigurationAsync("FeatureFlag.AIPoweredRecommendations", false)
+        };
+    }
+
+    /// <summary>
+    /// Sets feature flag settings for gradual rollout
+    /// </summary>
+    /// <param name="settings">Feature flag settings</param>
+    /// <returns>Task</returns>
+    public async Task SetFeatureFlagSettingsAsync(FeatureFlagSettings settings)
+    {
+        await SetConfigurationAsync("FeatureFlag.EnhancedRealTimeCalculations", settings.EnhancedRealTimeCalculations, "Enhanced real-time calculation engine", true);
+        await SetConfigurationAsync("FeatureFlag.AdvancedDiscountProcessing", settings.AdvancedDiscountProcessing, "Advanced discount processing engine", true);
+        await SetConfigurationAsync("FeatureFlag.ImprovedWeightBasedPricing", settings.ImprovedWeightBasedPricing, "Improved weight-based pricing", true);
+        await SetConfigurationAsync("FeatureFlag.EnhancedStockValidation", settings.EnhancedStockValidation, "Enhanced stock validation with reservations", true);
+        await SetConfigurationAsync("FeatureFlag.AdvancedPaymentProcessing", settings.AdvancedPaymentProcessing, "Advanced payment processing features", true);
+        await SetConfigurationAsync("FeatureFlag.RealTimeInventoryUpdates", settings.RealTimeInventoryUpdates, "Real-time inventory updates", true);
+        await SetConfigurationAsync("FeatureFlag.ComprehensiveAuditLogging", settings.ComprehensiveAuditLogging, "Comprehensive audit logging", true);
+        await SetConfigurationAsync("FeatureFlag.PerformanceOptimizations", settings.PerformanceOptimizations, "Performance optimization features", true);
+        await SetConfigurationAsync("FeatureFlag.AdvancedErrorHandling", settings.AdvancedErrorHandling, "Advanced error handling and recovery", true);
+        await SetConfigurationAsync("FeatureFlag.EnhancedInputValidation", settings.EnhancedInputValidation, "Enhanced input validation", true);
+        await SetConfigurationAsync("FeatureFlag.MultiCurrencySupport", settings.MultiCurrencySupport, "Multi-currency support", true);
+        await SetConfigurationAsync("FeatureFlag.AdvancedTaxCalculations", settings.AdvancedTaxCalculations, "Advanced tax calculations", true);
+        await SetConfigurationAsync("FeatureFlag.BulkOperationsSupport", settings.BulkOperationsSupport, "Bulk operations support", true);
+        await SetConfigurationAsync("FeatureFlag.AdvancedReporting", settings.AdvancedReporting, "Advanced reporting features", true);
+        await SetConfigurationAsync("FeatureFlag.AIPoweredRecommendations", settings.AIPoweredRecommendations, "AI-powered recommendations", true);
+    }
+
+    /// <summary>
+    /// Gets sales performance settings
+    /// </summary>
+    /// <returns>Sales performance settings</returns>
+    public async Task<SalesPerformanceSettings> GetSalesPerformanceSettingsAsync()
+    {
+        return new SalesPerformanceSettings
+        {
+            MaxConcurrentSales = await GetConfigurationAsync("SalesPerformance.MaxConcurrentSales", 10),
+            CalculationTimeoutMs = await GetConfigurationAsync("SalesPerformance.CalculationTimeoutMs", 100),
+            ValidationTimeoutMs = await GetConfigurationAsync("SalesPerformance.ValidationTimeoutMs", 50),
+            DatabaseQueryTimeoutMs = await GetConfigurationAsync("SalesPerformance.DatabaseQueryTimeoutMs", 200),
+            EnableCalculationCaching = await GetConfigurationAsync("SalesPerformance.EnableCalculationCaching", true),
+            CalculationCacheExpiryMinutes = await GetConfigurationAsync("SalesPerformance.CalculationCacheExpiryMinutes", 5),
+            EnableStockValidationCaching = await GetConfigurationAsync("SalesPerformance.EnableStockValidationCaching", true),
+            StockValidationCacheExpiryMinutes = await GetConfigurationAsync("SalesPerformance.StockValidationCacheExpiryMinutes", 2),
+            EnableDiscountCaching = await GetConfigurationAsync("SalesPerformance.EnableDiscountCaching", true),
+            DiscountCacheExpiryMinutes = await GetConfigurationAsync("SalesPerformance.DiscountCacheExpiryMinutes", 10),
+            EnableBatchProcessing = await GetConfigurationAsync("SalesPerformance.EnableBatchProcessing", true),
+            BatchSize = await GetConfigurationAsync("SalesPerformance.BatchSize", 50),
+            EnableAsyncProcessing = await GetConfigurationAsync("SalesPerformance.EnableAsyncProcessing", true),
+            MaxAsyncOperations = await GetConfigurationAsync("SalesPerformance.MaxAsyncOperations", 5),
+            EnableMemoryOptimization = await GetConfigurationAsync("SalesPerformance.EnableMemoryOptimization", true),
+            MemoryThresholdMB = await GetConfigurationAsync("SalesPerformance.MemoryThresholdMB", 100),
+            EnablePerformanceMonitoring = await GetConfigurationAsync("SalesPerformance.EnablePerformanceMonitoring", true),
+            PerformanceLogIntervalMinutes = await GetConfigurationAsync("SalesPerformance.PerformanceLogIntervalMinutes", 15)
+        };
+    }
+
+    /// <summary>
+    /// Sets sales performance settings
+    /// </summary>
+    /// <param name="settings">Sales performance settings</param>
+    /// <returns>Task</returns>
+    public async Task SetSalesPerformanceSettingsAsync(SalesPerformanceSettings settings)
+    {
+        await SetConfigurationAsync("SalesPerformance.MaxConcurrentSales", settings.MaxConcurrentSales, "Maximum concurrent sales operations", true);
+        await SetConfigurationAsync("SalesPerformance.CalculationTimeoutMs", settings.CalculationTimeoutMs, "Calculation timeout in milliseconds", true);
+        await SetConfigurationAsync("SalesPerformance.ValidationTimeoutMs", settings.ValidationTimeoutMs, "Validation timeout in milliseconds", true);
+        await SetConfigurationAsync("SalesPerformance.DatabaseQueryTimeoutMs", settings.DatabaseQueryTimeoutMs, "Database query timeout in milliseconds", true);
+        await SetConfigurationAsync("SalesPerformance.EnableCalculationCaching", settings.EnableCalculationCaching, "Enable calculation result caching", true);
+        await SetConfigurationAsync("SalesPerformance.CalculationCacheExpiryMinutes", settings.CalculationCacheExpiryMinutes, "Calculation cache expiry in minutes", true);
+        await SetConfigurationAsync("SalesPerformance.EnableStockValidationCaching", settings.EnableStockValidationCaching, "Enable stock validation caching", true);
+        await SetConfigurationAsync("SalesPerformance.StockValidationCacheExpiryMinutes", settings.StockValidationCacheExpiryMinutes, "Stock validation cache expiry in minutes", true);
+        await SetConfigurationAsync("SalesPerformance.EnableDiscountCaching", settings.EnableDiscountCaching, "Enable discount calculation caching", true);
+        await SetConfigurationAsync("SalesPerformance.DiscountCacheExpiryMinutes", settings.DiscountCacheExpiryMinutes, "Discount cache expiry in minutes", true);
+        await SetConfigurationAsync("SalesPerformance.EnableBatchProcessing", settings.EnableBatchProcessing, "Enable batch processing for operations", true);
+        await SetConfigurationAsync("SalesPerformance.BatchSize", settings.BatchSize, "Batch size for bulk operations", true);
+        await SetConfigurationAsync("SalesPerformance.EnableAsyncProcessing", settings.EnableAsyncProcessing, "Enable asynchronous processing", true);
+        await SetConfigurationAsync("SalesPerformance.MaxAsyncOperations", settings.MaxAsyncOperations, "Maximum concurrent async operations", true);
+        await SetConfigurationAsync("SalesPerformance.EnableMemoryOptimization", settings.EnableMemoryOptimization, "Enable memory optimization", true);
+        await SetConfigurationAsync("SalesPerformance.MemoryThresholdMB", settings.MemoryThresholdMB, "Memory threshold in MB", true);
+        await SetConfigurationAsync("SalesPerformance.EnablePerformanceMonitoring", settings.EnablePerformanceMonitoring, "Enable performance monitoring", true);
+        await SetConfigurationAsync("SalesPerformance.PerformanceLogIntervalMinutes", settings.PerformanceLogIntervalMinutes, "Performance log interval in minutes", true);
+    }
+
+    /// <summary>
+    /// Gets user calculation preferences
+    /// </summary>
+    /// <param name="userId">User identifier</param>
+    /// <returns>User calculation preferences</returns>
+    public async Task<UserCalculationPreferences> GetUserCalculationPreferencesAsync(Guid userId)
+    {
+        return new UserCalculationPreferences
+        {
+            UserId = userId,
+            DisplayPrecision = await GetUserConfigurationAsync(userId, "CalculationPreferences.DisplayPrecision", 2),
+            ShowCalculationBreakdown = await GetUserConfigurationAsync(userId, "CalculationPreferences.ShowCalculationBreakdown", true),
+            ShowTaxDetails = await GetUserConfigurationAsync(userId, "CalculationPreferences.ShowTaxDetails", true),
+            ShowDiscountDetails = await GetUserConfigurationAsync(userId, "CalculationPreferences.ShowDiscountDetails", true),
+            EnableRealTimeUpdates = await GetUserConfigurationAsync(userId, "CalculationPreferences.EnableRealTimeUpdates", true),
+            EnableSoundFeedback = await GetUserConfigurationAsync(userId, "CalculationPreferences.EnableSoundFeedback", true),
+            EnableHapticFeedback = await GetUserConfigurationAsync(userId, "CalculationPreferences.EnableHapticFeedback", true),
+            PreferredCurrencyFormat = await GetUserConfigurationAsync(userId, "CalculationPreferences.PreferredCurrencyFormat", "C2"),
+            PreferredNumberFormat = await GetUserConfigurationAsync(userId, "CalculationPreferences.PreferredNumberFormat", "N2"),
+            UseCompactNumbers = await GetUserConfigurationAsync(userId, "CalculationPreferences.UseCompactNumbers", false)
+        };
+    }
+
+    /// <summary>
+    /// Sets user calculation preferences
+    /// </summary>
+    /// <param name="userId">User identifier</param>
+    /// <param name="preferences">User calculation preferences</param>
+    /// <returns>Task</returns>
+    public async Task SetUserCalculationPreferencesAsync(Guid userId, UserCalculationPreferences preferences)
+    {
+        await SetUserConfigurationAsync(userId, "CalculationPreferences.DisplayPrecision", preferences.DisplayPrecision, "Display precision for calculations");
+        await SetUserConfigurationAsync(userId, "CalculationPreferences.ShowCalculationBreakdown", preferences.ShowCalculationBreakdown, "Show calculation breakdown");
+        await SetUserConfigurationAsync(userId, "CalculationPreferences.ShowTaxDetails", preferences.ShowTaxDetails, "Show tax calculation details");
+        await SetUserConfigurationAsync(userId, "CalculationPreferences.ShowDiscountDetails", preferences.ShowDiscountDetails, "Show discount calculation details");
+        await SetUserConfigurationAsync(userId, "CalculationPreferences.EnableRealTimeUpdates", preferences.EnableRealTimeUpdates, "Enable real-time calculation updates");
+        await SetUserConfigurationAsync(userId, "CalculationPreferences.EnableSoundFeedback", preferences.EnableSoundFeedback, "Enable sound feedback for calculations");
+        await SetUserConfigurationAsync(userId, "CalculationPreferences.EnableHapticFeedback", preferences.EnableHapticFeedback, "Enable haptic feedback for calculations");
+        await SetUserConfigurationAsync(userId, "CalculationPreferences.PreferredCurrencyFormat", preferences.PreferredCurrencyFormat, "Preferred currency format");
+        await SetUserConfigurationAsync(userId, "CalculationPreferences.PreferredNumberFormat", preferences.PreferredNumberFormat, "Preferred number format");
+        await SetUserConfigurationAsync(userId, "CalculationPreferences.UseCompactNumbers", preferences.UseCompactNumbers, "Use compact number format");
+    }
+
+    /// <summary>
+    /// Gets sales calculation precision settings for a shop
+    /// </summary>
+    /// <param name="shopId">Shop identifier</param>
+    /// <returns>Calculation precision settings</returns>
+    public async Task<SalesCalculationPrecisionSettings> GetSalesCalculationPrecisionSettingsAsync(Guid shopId)
+    {
+        return new SalesCalculationPrecisionSettings
+        {
+            PricePrecision = await GetShopConfigurationAsync(shopId, "CalculationPrecision.PricePrecision", 2),
+            WeightPrecision = await GetShopConfigurationAsync(shopId, "CalculationPrecision.WeightPrecision", 3),
+            QuantityPrecision = await GetShopConfigurationAsync(shopId, "CalculationPrecision.QuantityPrecision", 0),
+            TaxPrecision = await GetShopConfigurationAsync(shopId, "CalculationPrecision.TaxPrecision", 2),
+            DiscountPrecision = await GetShopConfigurationAsync(shopId, "CalculationPrecision.DiscountPrecision", 2),
+            TotalPrecision = await GetShopConfigurationAsync(shopId, "CalculationPrecision.TotalPrecision", 2),
+            RoundingMode = await GetShopConfigurationAsync(shopId, "CalculationPrecision.RoundingMode", RoundingMode.MidpointToEven),
+            UseHighPrecisionCalculations = await GetShopConfigurationAsync(shopId, "CalculationPrecision.UseHighPrecisionCalculations", false),
+            InternalCalculationPrecision = await GetShopConfigurationAsync(shopId, "CalculationPrecision.InternalCalculationPrecision", 6)
+        };
+    }
+
+    /// <summary>
+    /// Sets sales calculation precision settings for a shop
+    /// </summary>
+    /// <param name="shopId">Shop identifier</param>
+    /// <param name="settings">Calculation precision settings</param>
+    /// <returns>Task</returns>
+    public async Task SetSalesCalculationPrecisionSettingsAsync(Guid shopId, SalesCalculationPrecisionSettings settings)
+    {
+        await SetShopConfigurationAsync(shopId, "CalculationPrecision.PricePrecision", settings.PricePrecision, "Price calculation precision");
+        await SetShopConfigurationAsync(shopId, "CalculationPrecision.WeightPrecision", settings.WeightPrecision, "Weight calculation precision");
+        await SetShopConfigurationAsync(shopId, "CalculationPrecision.QuantityPrecision", settings.QuantityPrecision, "Quantity calculation precision");
+        await SetShopConfigurationAsync(shopId, "CalculationPrecision.TaxPrecision", settings.TaxPrecision, "Tax calculation precision");
+        await SetShopConfigurationAsync(shopId, "CalculationPrecision.DiscountPrecision", settings.DiscountPrecision, "Discount calculation precision");
+        await SetShopConfigurationAsync(shopId, "CalculationPrecision.TotalPrecision", settings.TotalPrecision, "Total calculation precision");
+        await SetShopConfigurationAsync(shopId, "CalculationPrecision.RoundingMode", settings.RoundingMode, "Rounding mode for calculations");
+        await SetShopConfigurationAsync(shopId, "CalculationPrecision.UseHighPrecisionCalculations", settings.UseHighPrecisionCalculations, "Use high precision calculations");
+        await SetShopConfigurationAsync(shopId, "CalculationPrecision.InternalCalculationPrecision", settings.InternalCalculationPrecision, "Internal calculation precision");
+    }
 }

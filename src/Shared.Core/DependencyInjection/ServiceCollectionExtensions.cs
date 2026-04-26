@@ -47,6 +47,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IValidationService, ValidationService>();
         services.AddScoped<IConfigurationService, ConfigurationService>();
         services.AddScoped<IConfigurationManagementService, ConfigurationManagementService>();
+        services.AddScoped<IFeatureFlagService, FeatureFlagService>();
+        services.AddScoped<IConfigurationInitializationService, ConfigurationInitializationService>();
         services.AddScoped<ILicenseService, LicenseService>();
         services.AddScoped<IIntegratedPosService, IntegratedPosService>();
         services.AddScoped<IApplicationStartupService, ApplicationStartupService>();
@@ -282,6 +284,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDiscountManagementService, DiscountManagementService>();
         services.AddScoped<IConfigurationService, ConfigurationService>();
         services.AddScoped<IConfigurationManagementService, ConfigurationManagementService>();
+        services.AddScoped<IFeatureFlagService, FeatureFlagService>();
+        services.AddScoped<IConfigurationInitializationService, ConfigurationInitializationService>();
         services.AddScoped<ILicenseService, LicenseService>();
         services.AddScoped<IIntegratedPosService, IntegratedPosService>();
         services.AddScoped<IApplicationStartupService, ApplicationStartupService>();

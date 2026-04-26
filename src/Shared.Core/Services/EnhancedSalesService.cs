@@ -16,7 +16,7 @@ public class EnhancedSalesService : SaleService, IEnhancedSalesService
 {
     private readonly IBusinessManagementService _businessManagementService;
     private readonly ICurrentUserService _currentUserService;
-    private readonly ILogger<EnhancedSalesService> _logger;
+    private readonly new ILogger<EnhancedSalesService> _logger;
 
     public EnhancedSalesService(
         ISaleRepository saleRepository,
