@@ -124,6 +124,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICrashRecoveryService, CrashRecoveryService>();
         services.AddScoped<IEnhancedErrorRecoveryService, EnhancedErrorRecoveryService>();
         
+        // Register sale error handling service (Requirements 8.1, 8.3, 8.4, 8.5)
+        services.AddScoped<ISaleErrorHandlingService, SaleErrorHandlingService>();
+        
         // Register database migration service
         services.AddScoped<IDatabaseMigrationService, DatabaseMigrationService>();
         
@@ -225,6 +228,8 @@ public static class ServiceCollectionExtensions
         {
             options.UseInMemoryDatabase("TestDatabase");
             options.EnableSensitiveDataLogging(true);
+            // Suppress transaction warning: in-memory DB ignores transactions (expected in tests)
+            options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning));
         });
 
         // Register business logic services
@@ -358,6 +363,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOfflineQueueService, OfflineQueueService>();
         services.AddScoped<ICrashRecoveryService, CrashRecoveryService>();
         services.AddScoped<IEnhancedErrorRecoveryService, EnhancedErrorRecoveryService>();
+        
+        // Register sale error handling service (Requirements 8.1, 8.3, 8.4, 8.5)
+        services.AddScoped<ISaleErrorHandlingService, SaleErrorHandlingService>();
         
         // Add test configurations
         services.AddSingleton(provider => new SyncConfiguration

@@ -141,8 +141,8 @@ public partial class MainViewModel : BaseViewModel
         ReportsViewModel = new ReportsViewModel(null!, null!, null!, null!, null!, null!);
         BusinessManagementViewModel = new BusinessManagementViewModel(null!, null!, null!);
         UserManagementViewModel = new UserManagementViewModel(null!, null!, null!, null!);
-        AdvancedReportsViewModel = new AdvancedReportsViewModel(null!, null!, null!, null!);
-        AIInventoryViewModel = new AIInventoryViewModel(null!, null!, null!, null!);
+        AdvancedReportsViewModel = new AdvancedReportsViewModel(null!, null!, null!, null!, null!);
+        AIInventoryViewModel = new AIInventoryViewModel(null!, null!, null!, null!, null!);
     }
 
     public bool IsBusinessOwner => CurrentUserRole == UserRole.BusinessOwner;

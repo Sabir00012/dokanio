@@ -177,7 +177,7 @@
                                 <DataGridTextColumn Header="Product" Binding="{Binding ProductName}" Width="*"/>
                                 <DataGridTextColumn Header="Expiry Date" Binding="{Binding ExpiryDate, StringFormat='dd/MM/yyyy'}" Width="120"/>
                                 <DataGridTextColumn Header="Days Left" Binding="{Binding DaysUntilExpiry}" Width="90"/>
-                                <DataGridTextColumn Header="Stock" Binding="{Binding CurrentStock}" Width="80"/>
+                                <DataGridTextColumn Header="Stock" Binding="{Binding QuantityAtRisk}" Width="80"/>
                                 <DataGridTextColumn Header="Risk Level" Binding="{Binding RiskLevel}" Width="100"/>
                             </DataGrid.Columns>
                         </DataGrid>

@@ -188,8 +188,8 @@
                                   GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Shop" Binding="{Binding ShopName}" Width="*"/>
-                                <DataGridTextColumn Header="Revenue" Binding="{Binding TotalRevenue, StringFormat='৳{0:N2}'}" Width="150"/>
-                                <DataGridTextColumn Header="Transactions" Binding="{Binding TransactionCount}" Width="120"/>
+                                <DataGridTextColumn Header="Revenue" Binding="{Binding TodayRevenue, StringFormat='৳{0:N2}'}" Width="150"/>
+                                <DataGridTextColumn Header="Transactions" Binding="{Binding TodayTransactions}" Width="120"/>
                                 <DataGridTextColumn Header="Avg Order" Binding="{Binding AverageOrderValue, StringFormat='৳{0:N2}'}" Width="120"/>
                             </DataGrid.Columns>
                         </DataGrid>

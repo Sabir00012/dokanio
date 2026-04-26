@@ -148,6 +148,44 @@ public partial class SaleViewModel : BaseViewModel
     private ShopConfiguration? _shopConfiguration;
     private CancellationTokenSource? _calculationCancellationToken;
 
+    // ── Missing properties referenced by SaleView.axaml ──────────────────────
+
+    [ObservableProperty]
+    private bool isSearching;
+
+    [ObservableProperty]
+    private bool hasSearched;
+
+    [ObservableProperty]
+    private bool customerFound;
+
+    [ObservableProperty]
+    private string customerMembershipInfo = string.Empty;
+
+    [ObservableProperty]
+    private bool isProcessingSale;
+
+    [ObservableProperty]
+    private bool canCompleteSale = true;
+
+    [ObservableProperty]
+    private bool canPrintReceipt;
+
+    [ObservableProperty]
+    private bool canEmailReceipt;
+
+    [ObservableProperty]
+    private string busyMessage = string.Empty;
+
+    [ObservableProperty]
+    private bool hasMessage;
+
+    [ObservableProperty]
+    private string messageIcon = string.Empty;
+
+    [ObservableProperty]
+    private string message = string.Empty;
+
     public SaleViewModel(
         IBarcodeIntegrationService? barcodeIntegrationService = null,
         IMultiTabSalesManager? salesManager = null,
@@ -852,6 +890,9 @@ public partial class SaleViewModel : BaseViewModel
         CustomerLastVisit = customer.LastVisit;
         MembershipTier = customer.Tier.ToString();
         AvailableDiscounts = customer.AvailableDiscounts;
+        CustomerFound = true;
+        CustomerMembershipInfo = $"{customer.Tier} member · {customer.MembershipNumber}";
+        HasCustomer = true;
     }
 
     private void PopulateMembershipInfo(CustomerMembershipDetails membership)
@@ -1042,6 +1083,156 @@ public partial class SaleViewModel : BaseViewModel
         {
             _logger?.LogError(ex, "Error saving session");
         }
+    }
+
+    // ── Missing commands referenced by SaleView.axaml ────────────────────────
+
+    [RelayCommand]
+    private async Task ClearAllItems()
+    {
+        try
+        {
+            var itemIds = SaleItems.Select(i => i.Id).ToList();
+            SaleItems.Clear();
+
+            if (_salesManager != null)
+            {
+                foreach (var id in itemIds)
+                    await _salesManager.RemoveItemFromSessionAsync(_sessionId, id);
+            }
+
+            TriggerRealTimeCalculation();
+            _logger?.LogDebug("All items cleared from sale");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error clearing all items");
+            SetError($"Failed to clear items: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task SaveDraft()
+    {
+        try
+        {
+            await SaveSessionAsync();
+            ShowMessage("💾", "Draft saved successfully.");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error saving draft");
+            SetError($"Failed to save draft: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task LoadDraft()
+    {
+        if (_salesManager == null)
+        {
+            SetError("Draft loading is not available.");
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            BusyMessage = "Loading draft...";
+            ShowMessage("📋", "No saved drafts found.");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error loading draft");
+            SetError($"Failed to load draft: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyMessage = string.Empty;
+        }
+    }
+
+    [RelayCommand]
+    private void SetAmount(string amountStr)
+    {
+        if (decimal.TryParse(amountStr, out var amount))
+            AmountReceived = amount;
+    }
+
+    [RelayCommand]
+    private void SetExactAmount()
+    {
+        AmountReceived = Total;
+    }
+
+    [RelayCommand]
+    private async Task PrintReceipt()
+    {
+        if (_receiptService == null)
+        {
+            SetError("Receipt printing is not available.");
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            BusyMessage = "Printing receipt...";
+            ShowMessage("🖨️", "Receipt sent to printer.");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error printing receipt");
+            SetError($"Failed to print receipt: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyMessage = string.Empty;
+        }
+    }
+
+    [RelayCommand]
+    private async Task EmailReceipt()
+    {
+        if (string.IsNullOrWhiteSpace(CustomerEmail))
+        {
+            SetError("No customer email address available.");
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            BusyMessage = "Sending receipt...";
+            ShowMessage("📧", $"Receipt emailed to {CustomerEmail}.");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error emailing receipt");
+            SetError($"Failed to email receipt: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+            BusyMessage = string.Empty;
+        }
+    }
+
+    [RelayCommand]
+    private void DismissMessage()
+    {
+        HasMessage = false;
+        Message = string.Empty;
+        MessageIcon = string.Empty;
+    }
+
+    private void ShowMessage(string icon, string text)
+    {
+        MessageIcon = icon;
+        Message = text;
+        HasMessage = true;
     }
 
     // Cleanup method

@@ -67,7 +67,7 @@
                             <DataGridTemplateColumn Header="Status" Width="80">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding IsActive, Converter={x:Static BoolConverters.And}}"
+                                        <TextBlock Text="{Binding IsActive, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Active|Inactive'}"
                                                    Foreground="{Binding IsActive, Converter={StaticResource BoolToColorConverter}}"
                                                    VerticalAlignment="Center"/>
                                     </DataTemplate>
