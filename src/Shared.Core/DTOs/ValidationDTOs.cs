@@ -3,6 +3,52 @@ using Shared.Core.Enums;
 namespace Shared.Core.DTOs;
 
 /// <summary>
+/// Validation result for sale-level operations (design.md model)
+/// </summary>
+public class SaleValidationResult
+{
+    public bool IsValid { get; set; } = true;
+    public IEnumerable<SaleValidationError> Errors { get; set; } = new List<SaleValidationError>();
+    public IEnumerable<SaleValidationWarning> Warnings { get; set; } = new List<SaleValidationWarning>();
+    public Dictionary<Guid, IEnumerable<string>> ItemErrors { get; set; } = new();
+}
+
+/// <summary>
+/// Structured validation error for sale operations (design.md model)
+/// </summary>
+public class SaleValidationError
+{
+    public string Field { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public SaleValidationErrorType Type { get; set; }
+    public Guid? RelatedEntityId { get; set; }
+}
+
+/// <summary>
+/// Structured validation warning for sale operations
+/// </summary>
+public class SaleValidationWarning
+{
+    public string Field { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string? Suggestion { get; set; }
+}
+
+/// <summary>
+/// Types of validation errors for sale operations (design.md enum)
+/// </summary>
+public enum SaleValidationErrorType
+{
+    Required,
+    InvalidFormat,
+    OutOfRange,
+    BusinessRule,
+    StockUnavailable,
+    ProductInactive,
+    CustomerInvalid
+}
+
+/// <summary>
 /// Base validation result class
 /// </summary>
 public abstract class BaseValidationResult

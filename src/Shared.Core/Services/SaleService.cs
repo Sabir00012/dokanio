@@ -29,6 +29,7 @@ public class SaleService : ISaleService
     protected readonly IShopRepository _shopRepository;
     protected readonly PosDbContext _context;
     protected readonly ILogger<SaleService> _logger;
+    protected readonly IValidationService _validationService;
 
     public SaleService(
         ISaleRepository saleRepository,
@@ -44,7 +45,8 @@ public class SaleService : ISaleService
         IAuthorizationService authorizationService,
         IShopRepository shopRepository,
         PosDbContext context,
-        ILogger<SaleService> logger)
+        ILogger<SaleService> logger,
+        IValidationService validationService)
     {
         _saleRepository = saleRepository;
         _saleItemRepository = saleItemRepository;
@@ -60,6 +62,7 @@ public class SaleService : ISaleService
         _shopRepository = shopRepository;
         _context = context;
         _logger = logger;
+        _validationService = validationService;
     }
 
     // =========================================================================
@@ -220,11 +223,15 @@ public class SaleService : ISaleService
     /// </summary>
     public async Task<Sale> CreateSaleAsync(string invoiceNumber, Guid deviceId)
     {
-        if (string.IsNullOrWhiteSpace(invoiceNumber))
-            throw new ArgumentException("Invoice number cannot be empty.", nameof(invoiceNumber));
-
-        if (deviceId == Guid.Empty)
-            throw new ArgumentException("Device ID cannot be empty.", nameof(deviceId));
+        // Requirement 8.2: validate all inputs before processing
+        var validation = await _validationService.ValidateSaleCreationAsync(invoiceNumber, deviceId, Guid.NewGuid());
+        if (!validation.IsValid)
+        {
+            var firstError = validation.Errors.First();
+            throw firstError.Type == SaleValidationErrorType.Required
+                ? new ArgumentException(firstError.Message, firstError.Field)
+                : new ArgumentException(firstError.Message, firstError.Field);
+        }
 
         var licenseStatus = await _licenseService.CheckLicenseStatusAsync();
         if (licenseStatus != LicenseStatus.Active)
@@ -284,11 +291,14 @@ public class SaleService : ISaleService
     /// </summary>
     public async Task<Sale> CreateSaleAsync(Guid deviceId, Guid userId, Guid? customerId = null)
     {
-        if (deviceId == Guid.Empty)
-            throw new ArgumentException("Device ID cannot be empty.", nameof(deviceId));
-
-        if (userId == Guid.Empty)
-            throw new ArgumentException("User ID cannot be empty.", nameof(userId));
+        // Requirement 8.2: validate all inputs before processing
+        var invoiceNumberPlaceholder = "PENDING"; // will be generated after validation
+        var validation = await _validationService.ValidateSaleCreationAsync(invoiceNumberPlaceholder, deviceId, userId, customerId);
+        if (!validation.IsValid)
+        {
+            var firstError = validation.Errors.First();
+            throw new ArgumentException(firstError.Message, firstError.Field);
+        }
 
         var licenseStatus = await _licenseService.CheckLicenseStatusAsync();
         if (licenseStatus != LicenseStatus.Active)
@@ -481,14 +491,15 @@ public class SaleService : ISaleService
     /// </summary>
     public async Task<Sale> AddItemToSaleAsync(Guid saleId, Guid productId, int quantity, decimal unitPrice, string? batchNumber = null)
     {
-        if (saleId == Guid.Empty)
-            throw new ArgumentException("Sale ID cannot be empty.", nameof(saleId));
-
-        if (productId == Guid.Empty)
-            throw new ArgumentException("Product ID cannot be empty.", nameof(productId));
-
-        if (quantity <= 0)
-            throw new ArgumentOutOfRangeException(nameof(quantity), "Quantity must be greater than zero.");
+        // Requirement 8.2: validate all inputs before processing
+        var validation = await _validationService.ValidateProductAdditionAsync(saleId, productId, quantity, batchNumber);
+        if (!validation.IsValid)
+        {
+            var firstError = validation.Errors.First();
+            throw firstError.Type == SaleValidationErrorType.OutOfRange
+                ? new ArgumentOutOfRangeException(firstError.Field, firstError.Message)
+                : new ArgumentException(firstError.Message, firstError.Field);
+        }
 
         if (unitPrice < 0)
             throw new ArgumentOutOfRangeException(nameof(unitPrice), "Unit price cannot be negative.");
@@ -555,14 +566,15 @@ public class SaleService : ISaleService
     /// </summary>
     public async Task<Sale> AddWeightBasedItemToSaleAsync(Guid saleId, Guid productId, decimal weight, string? batchNumber = null)
     {
-        if (saleId == Guid.Empty)
-            throw new ArgumentException("Sale ID cannot be empty.", nameof(saleId));
-
-        if (productId == Guid.Empty)
-            throw new ArgumentException("Product ID cannot be empty.", nameof(productId));
-
-        if (weight <= 0)
-            throw new ArgumentOutOfRangeException(nameof(weight), "Weight must be greater than zero.");
+        // Requirement 8.2: validate all inputs before processing
+        var validation = await _validationService.ValidateWeightBasedProductAdditionAsync(saleId, productId, weight);
+        if (!validation.IsValid)
+        {
+            var firstError = validation.Errors.First();
+            throw firstError.Type == SaleValidationErrorType.OutOfRange
+                ? new ArgumentOutOfRangeException(firstError.Field, firstError.Message)
+                : new ArgumentException(firstError.Message, firstError.Field);
+        }
 
         var sale = await _saleRepository.GetByIdAsync(saleId);
         if (sale == null)
@@ -839,8 +851,14 @@ public class SaleService : ISaleService
     /// </summary>
     public async Task<Sale> CompleteSaleAsync(Guid saleId, PaymentMethod paymentMethod)
     {
-        if (saleId == Guid.Empty)
-            throw new ArgumentException("Sale ID cannot be empty.", nameof(saleId));
+        // Requirement 8.2: validate all inputs before processing
+        // Use 1 as a placeholder amount — the real amount check happens in the overload with amountPaid
+        var validation = await _validationService.ValidateSaleCompletionAsync(saleId, paymentMethod, 1m);
+        if (!validation.IsValid)
+        {
+            var firstError = validation.Errors.First();
+            throw new ArgumentException(firstError.Message, firstError.Field);
+        }
 
         var sale = await _saleRepository.GetByIdAsync(saleId);
         if (sale == null)

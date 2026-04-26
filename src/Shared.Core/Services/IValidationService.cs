@@ -1,5 +1,6 @@
 using Shared.Core.DTOs;
 using Shared.Core.Entities;
+using Shared.Core.Enums;
 
 namespace Shared.Core.Services;
 
@@ -8,6 +9,62 @@ namespace Shared.Core.Services;
 /// </summary>
 public interface IValidationService
 {
+    #region Sale Operation Validation (Requirements 8.2, 10.1)
+
+    /// <summary>
+    /// Validates a sale creation request with field-level and business rule checks.
+    /// Logs validation failures per Requirement 10.1.
+    /// </summary>
+    Task<SaleValidationResult> ValidateSaleCreationAsync(
+        string invoiceNumber,
+        Guid deviceId,
+        Guid userId,
+        Guid? customerId = null);
+
+    /// <summary>
+    /// Validates a product addition request (quantity-based).
+    /// </summary>
+    Task<SaleValidationResult> ValidateProductAdditionAsync(
+        Guid saleId,
+        Guid productId,
+        int quantity,
+        string? batchNumber = null);
+
+    /// <summary>
+    /// Validates a weight-based product addition request.
+    /// </summary>
+    Task<SaleValidationResult> ValidateWeightBasedProductAdditionAsync(
+        Guid saleId,
+        Guid productId,
+        decimal weight);
+
+    /// <summary>
+    /// Validates an item quantity update request.
+    /// </summary>
+    Task<SaleValidationResult> ValidateItemQuantityUpdateAsync(
+        Guid saleItemId,
+        int newQuantity);
+
+    /// <summary>
+    /// Validates a sale completion request (payment method and amount).
+    /// </summary>
+    Task<SaleValidationResult> ValidateSaleCompletionAsync(
+        Guid saleId,
+        PaymentMethod paymentMethod,
+        decimal amountPaid);
+
+    /// <summary>
+    /// Validates customer data for sale association.
+    /// </summary>
+    Task<SaleValidationResult> ValidateCustomerForSaleAsync(Guid customerId);
+
+    /// <summary>
+    /// Aggregates multiple SaleValidationResults into a single combined result.
+    /// </summary>
+    SaleValidationResult AggregateValidationResults(IEnumerable<SaleValidationResult> results);
+
+    #endregion
+
     #region Field-Level Validation
     
     /// <summary>

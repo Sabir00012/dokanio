@@ -34,10 +34,12 @@ public class EnhancedSalesService : SaleService, IEnhancedSalesService
         IShopRepository shopRepository,
         ICurrentUserService currentUserService,
         PosDbContext context,
-        ILogger<EnhancedSalesService> logger)
+        ILogger<EnhancedSalesService> logger,
+        IValidationService validationService)
         : base(saleRepository, saleItemRepository, productService, inventoryService, 
                weightBasedPricingService, membershipService, discountService, 
-               configurationService, licenseService, userRepository, authorizationService, shopRepository, context, logger)
+               configurationService, licenseService, userRepository, authorizationService, shopRepository, context, logger,
+               validationService)
     {
         _businessManagementService = businessManagementService;
         _currentUserService = currentUserService;
