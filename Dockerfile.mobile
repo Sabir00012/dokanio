@@ -1,0 +1,19 @@
+# Multi-stage build for .NET MAUI Mobile App (.NET 10)
+# Note: MAUI apps require platform-specific SDKs (Android/iOS), this is for CI testing
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY ["src/Mobile/Mobile.csproj", "src/Mobile/"]
+COPY ["src/Shared.Core/Shared.Core.csproj", "src/Shared.Core/"]
+RUN dotnet restore "src/Mobile/Mobile.csproj"
+COPY . .
+WORKDIR "/src/src/Mobile"
+RUN dotnet build "Mobile.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "Mobile.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Note: MAUI apps require platform-specific runtimes, this stage is for build verification only
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+# MAUI app cannot run in container, this is for build verification

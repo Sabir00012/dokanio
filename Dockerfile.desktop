@@ -1,0 +1,19 @@
+# Multi-stage build for Avalonia Desktop App (.NET 10)
+# Note: Desktop app is built for Windows, this is for reference/CI testing
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY ["src/Desktop/Desktop.csproj", "src/Desktop/"]
+COPY ["src/Shared.Core/Shared.Core.csproj", "src/Shared.Core/"]
+RUN dotnet restore "src/Desktop/Desktop.csproj"
+COPY . .
+WORKDIR "/src/src/Desktop"
+RUN dotnet build "Desktop.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "Desktop.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Note: Desktop app requires Windows runtime, this stage is for CI/build verification only
+FROM mcr.microsoft.com/dotnet/runtime:10.0-nanoserver-ltsc2022 AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+# Desktop app cannot run in container, this is for build verification

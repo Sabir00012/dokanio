@@ -1,0 +1,377 @@
+# Dokanio Architecture
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Client Applications                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │   Desktop    │  │    Mobile    │  │  Web Browser │           │
+│  │  (Avalonia)  │  │   (.MAUI)    │  │  (Blazor)    │           │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
+│         │                 │                 │                    │
+│         └─────────────────┼─────────────────┘                    │
+│                           │                                      │
+│                    HTTP/HTTPS (REST)                             │
+│                           │                                      │
+└───────────────────────────┼──────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    API Gateway / Load Balancer                   │
+│                      (Reverse Proxy)                             │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+        ▼                   ▼                   ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│   Server 1   │    │   Server 2   │    │   Server N   │
+│ (ASP.NET)    │    │ (ASP.NET)    │    │ (ASP.NET)    │
+└──────┬───────┘    └──────┬───────┘    └──────┬───────┘
+       │                   │                   │
+       └───────────────────┼───────────────────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+        ▼                  ▼                  ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│ PostgreSQL   │    │    Redis     │    │ Elasticsearch│
+│  (Database)  │    │  (Cache)     │    │  (Logs)      │
+└──────────────┘    └──────────────┘    └──────────────┘
+        │                  │                  │
+        └──────────────────┼──────────────────┘
+                           │
+                    Shared Data Layer
+```
+
+## Docker Compose Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Docker Network (pos-network)               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                    Core Services                         │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │                                                          │   │
+│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐        │   │
+│  │  │ PostgreSQL │  │   Redis    │  │   Server   │        │   │
+│  │  │  :5432     │  │   :6379    │  │   :5000    │        │   │
+│  │  └────────────┘  └────────────┘  └────────────┘        │   │
+│  │                                                          │   │
+│  │  ┌────────────┐                                         │   │
+│  │  │ Dashboard  │                                         │   │
+│  │  │   :3000    │                                         │   │
+│  │  └────────────┘                                         │   │
+│  │                                                          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                  Monitoring Stack                        │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │                                                          │   │
+│  │  ┌────────────┐  ┌────────────┐                         │   │
+│  │  │ Prometheus │  │  Grafana   │                         │   │
+│  │  │   :9090    │  │   :3001    │                         │   │
+│  │  └────────────┘  └────────────┘                         │   │
+│  │                                                          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                   Logging Stack                          │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │                                                          │   │
+│  │  ┌────────────┐  ┌────────────┐                         │   │
+│  │  │Elasticsearch│  │  Kibana    │                         │   │
+│  │  │   :9200    │  │   :5601    │                         │   │
+│  │  └────────────┘  └────────────┘                         │   │
+│  │                                                          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## CI/CD Pipeline Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GitHub Repository                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  Push/PR Event                                                   │
+│         │                                                        │
+│         ▼                                                        │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              GitHub Actions Workflows                    │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │                                                          │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │   │
+│  │  │     CI      │  │   Coverage  │  │  Security   │     │   │
+│  │  │   Pipeline  │  │   Tracking  │  │   Scanning  │     │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘     │   │
+│  │                                                          │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │   │
+│  │  │   Docker    │  │  Dependabot │  │   Release   │     │   │
+│  │  │   Build     │  │   Updates   │  │ Automation  │     │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘     │   │
+│  │                                                          │   │
+│  │  ┌─────────────┐                                        │   │
+│  │  │  Deployment │                                        │   │
+│  │  │  Pipeline   │                                        │   │
+│  │  └─────────────┘                                        │   │
+│  │                                                          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│         │                    │                    │              │
+│         ▼                    ▼                    ▼              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
+│  │   Codecov    │    │   Trivy      │    │   GitHub     │      │
+│  │  (Coverage)  │    │  (Security)  │    │  Container   │      │
+│  │              │    │              │    │  Registry    │      │
+│  └──────────────┘    └──────────────┘    └──────────────┘      │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Client Application                          │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                    HTTP/HTTPS Request
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      API Server                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  Controllers → Services → Repositories                   │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                ┌────────────┼────────────┐
+                │            │            │
+                ▼            ▼            ▼
+        ┌──────────────┐ ┌──────────┐ ┌──────────┐
+        │ PostgreSQL   │ │  Redis   │ │Elasticsearch
+        │  (Primary)   │ │ (Cache)  │ │  (Logs)
+        └──────────────┘ └──────────┘ └──────────┘
+                │            │            │
+                └────────────┼────────────┘
+                             │
+                    Response to Client
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Client Application                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Deployment Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Production Environment                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                  Load Balancer / Reverse Proxy           │   │
+│  │                    (Nginx / HAProxy)                     │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                             │                                    │
+│         ┌───────────────────┼───────────────────┐               │
+│         │                   │                   │               │
+│         ▼                   ▼                   ▼               │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
+│  │  Container 1 │    │  Container 2 │    │  Container N │      │
+│  │  (Server)    │    │  (Server)    │    │  (Server)    │      │
+│  └──────────────┘    └──────────────┘    └──────────────┘      │
+│         │                   │                   │               │
+│         └───────────────────┼───────────────────┘               │
+│                             │                                    │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              Persistent Storage Layer                    │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │                                                          │   │
+│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐        │   │
+│  │  │ PostgreSQL │  │   Redis    │  │ Elasticsearch       │   │
+│  │  │  Cluster   │  │  Cluster   │  │  Cluster   │        │   │
+│  │  └────────────┘  └────────────┘  └────────────┘        │   │
+│  │                                                          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              Monitoring & Logging                        │   │
+│  ├──────────────────────────────────────────────────────────┤   │
+│  │                                                          │   │
+│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐        │   │
+│  │  │ Prometheus │  │  Grafana   │  │  Kibana    │        │   │
+│  │  └────────────┘  └────────────┘  └────────────┘        │   │
+│  │                                                          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Technology Stack
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Technology Stack                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  Frontend                                                        │
+│  ├─ Desktop: Avalonia UI 11 (.NET 10)                           │
+│  ├─ Mobile: .NET MAUI 10 (Android/iOS)                          │
+│  └─ Web: Blazor Server (.NET 10)                                │
+│                                                                   │
+│  Backend                                                         │
+│  ├─ API: ASP.NET Core (.NET 10)                                 │
+│  ├─ ORM: Entity Framework Core 10                               │
+│  └─ Auth: JWT Bearer                                            │
+│                                                                   │
+│  Data Storage                                                    │
+│  ├─ Primary: PostgreSQL 15                                      │
+│  ├─ Local: SQLite (clients)                                     │
+│  ├─ Cache: Redis 7                                              │
+│  └─ Logs: Elasticsearch 8.10                                    │
+│                                                                   │
+│  Containerization                                                │
+│  ├─ Container: Docker                                           │
+│  ├─ Orchestration: Docker Compose                               │
+│  └─ Registry: GitHub Container Registry                         │
+│                                                                   │
+│  CI/CD                                                           │
+│  ├─ Platform: GitHub Actions                                    │
+│  ├─ Testing: xUnit 2, FsCheck 3                                 │
+│  ├─ Coverage: Codecov                                           │
+│  └─ Security: Trivy                                             │
+│                                                                   │
+│  Monitoring                                                      │
+│  ├─ Metrics: Prometheus                                         │
+│  ├─ Visualization: Grafana                                      │
+│  ├─ Logs: Kibana                                                │
+│  └─ APM: Application Insights (optional)                        │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Service Dependencies
+
+```
+webdashboard
+    │
+    └─→ server
+            │
+            ├─→ postgres
+            │
+            └─→ redis
+
+desktop
+    │
+    └─→ server (optional, for sync)
+
+mobile
+    │
+    └─→ server (optional, for sync)
+
+prometheus
+    │
+    └─→ server (metrics endpoint)
+
+grafana
+    │
+    └─→ prometheus
+
+kibana
+    │
+    └─→ elasticsearch
+```
+
+## Scaling Strategy
+
+```
+Horizontal Scaling
+├─ Multiple Server instances behind load balancer
+├─ Redis cluster for distributed caching
+├─ PostgreSQL replication for read scaling
+└─ Elasticsearch cluster for log aggregation
+
+Vertical Scaling
+├─ Increase container resource limits
+├─ Increase database memory
+├─ Increase cache memory
+└─ Increase log storage
+
+Auto-scaling (Kubernetes)
+├─ Scale based on CPU usage
+├─ Scale based on memory usage
+├─ Scale based on request rate
+└─ Scale based on custom metrics
+```
+
+## Security Layers
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Security Architecture                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  Layer 1: Network Security                                      │
+│  ├─ Firewall rules                                              │
+│  ├─ VPC isolation                                               │
+│  └─ TLS/SSL encryption                                          │
+│                                                                   │
+│  Layer 2: Application Security                                  │
+│  ├─ JWT authentication                                          │
+│  ├─ Role-based access control                                   │
+│  ├─ Input validation                                            │
+│  └─ SQL injection prevention                                    │
+│                                                                   │
+│  Layer 3: Data Security                                         │
+│  ├─ Encrypted connections                                       │
+│  ├─ Password hashing (BCrypt)                                   │
+│  ├─ Secrets management                                          │
+│  └─ Data encryption at rest                                     │
+│                                                                   │
+│  Layer 4: Infrastructure Security                               │
+│  ├─ Container scanning                                          │
+│  ├─ Vulnerability scanning                                      │
+│  ├─ Dependency scanning                                         │
+│  └─ Security audits                                             │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Disaster Recovery
+
+```
+Backup Strategy
+├─ Database backups (daily)
+├─ Configuration backups (on change)
+├─ Log backups (continuous)
+└─ Image backups (on release)
+
+Recovery Procedures
+├─ Database restore from backup
+├─ Service restart procedures
+├─ Failover procedures
+└─ Data recovery procedures
+
+RTO/RPO Targets
+├─ RTO: 1 hour
+├─ RPO: 15 minutes
+└─ Backup retention: 30 days
+```
+
+This architecture provides:
+- ✅ High availability
+- ✅ Scalability
+- ✅ Security
+- ✅ Monitoring
+- ✅ Disaster recovery
+- ✅ Easy deployment
