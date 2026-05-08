@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '0 2 * * *'  # Daily at 2 AM UTC
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   coverage:
     runs-on: ubuntu-latest
