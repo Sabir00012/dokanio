@@ -30,6 +30,7 @@ public class SaleRepository : Repository<Sale>, ISaleRepository
             var sale = await _dbSet
                 .Include(s => s.Customer)
                 .Include(s => s.Items)
+                    .ThenInclude(i => i.Product)
                 .FirstOrDefaultAsync(s => s.Id == id);
             
             if (sale != null)

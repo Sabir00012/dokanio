@@ -586,7 +586,10 @@ public class SaleService : ISaleService
             throw new InvalidOperationException("Weight-based products must be added using AddWeightBasedItemToSaleAsync.");
 
         if (!await _inventoryService.HasSufficientStockAsync(productId, quantity))
-            throw new InvalidOperationException("Insufficient stock for the requested quantity.");
+        {
+            var availableStock = await _inventoryService.GetCurrentStockAsync(productId);
+            throw new InvalidOperationException($"Insufficient stock for the requested quantity. Available: {availableStock}");
+        }
 
         var totalPrice = Math.Round(quantity * unitPrice, 2, MidpointRounding.AwayFromZero);
 
@@ -598,6 +601,7 @@ public class SaleService : ISaleService
             Quantity = quantity,
             UnitPrice = unitPrice,
             TotalPrice = totalPrice,
+            LineSubtotal = totalPrice,
             BatchNumber = batchNumber
         };
 
@@ -695,6 +699,7 @@ public class SaleService : ISaleService
             RatePerKilogram = product.RatePerKilogram.Value,
             IsWeightBased = true,
             TotalPrice = totalPrice,
+            LineSubtotal = totalPrice,
             BatchNumber = batchNumber
         };
 
@@ -857,6 +862,7 @@ public class SaleService : ISaleService
         // Update the sale item
         saleItem.Weight = roundedWeight;
         saleItem.TotalPrice = newTotalPrice;
+        saleItem.LineSubtotal = newTotalPrice;
 
         await _saleItemRepository.UpdateAsync(saleItem);
         await _saleItemRepository.SaveChangesAsync();
