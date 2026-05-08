@@ -5,6 +5,9 @@ on:
     workflows: ["CI Pipeline"]
     types: [completed]
 
+permissions:
+  contents: read
+
 jobs:
   update-badge:
     runs-on: ubuntu-latest
