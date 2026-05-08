@@ -155,6 +155,8 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand]
     private async Task LoadBusinessesAsync()
     {
+        await OnUserActivityDetectedAsync();
+        
         if (!IsBusinessOwner) return;
 
         try
@@ -186,6 +188,8 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand]
     private async Task LoadShopsForBusinessAsync()
     {
+        await OnUserActivityDetectedAsync();
+        
         if (SelectedBusiness == null) return;
 
         try
@@ -214,12 +218,15 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand]
     private async Task RefreshDashboardAsync()
     {
+        await OnUserActivityDetectedAsync();
         await LoadDashboardData();
     }
 
     [RelayCommand]
     private async Task SyncDataAsync()
     {
+        await OnUserActivityDetectedAsync();
+        
         if (_multiTenantSyncService == null) return;
 
         SyncStatus = "Syncing...";
@@ -255,12 +262,14 @@ public partial class MainViewModel : BaseViewModel
     [RelayCommand]
     private void SelectBusiness(BusinessResponse business)
     {
+        _ = OnUserActivityDetectedAsync();
         SelectedBusiness = business;
     }
 
     [RelayCommand]
     private void SelectShop(ShopResponse shop)
     {
+        _ = OnUserActivityDetectedAsync();
         SelectedShop = shop;
     }
 
@@ -320,6 +329,25 @@ public partial class MainViewModel : BaseViewModel
     /// </summary>
     public event EventHandler? SessionExpired;
 
+    /// <summary>
+    /// Called when actual user activity is detected (e.g., command execution, navigation).
+    /// Updates the session activity timestamp to prevent inactivity-based expiry.
+    /// </summary>
+    public async Task OnUserActivityDetectedAsync()
+    {
+        if (_currentUserService?.IsAuthenticated == true)
+        {
+            try
+            {
+                await _currentUserService.UpdateActivityAsync();
+            }
+            catch
+            {
+                // Log but don't crash on activity update failures
+            }
+        }
+    }
+
     private async Task StartSessionExpiryMonitorAsync()
     {
         if (_currentUserService == null) return;
@@ -331,6 +359,7 @@ public partial class MainViewModel : BaseViewModel
 
             try
             {
+                // Only check for expiry; do NOT update activity here
                 var expired = await _currentUserService.IsSessionExpiredAsync();
                 if (expired)
                 {
@@ -338,9 +367,6 @@ public partial class MainViewModel : BaseViewModel
                     SessionExpired?.Invoke(this, EventArgs.Empty);
                     break;
                 }
-
-                // Keep session alive while user is active
-                await _currentUserService.UpdateActivityAsync();
             }
             catch
             {

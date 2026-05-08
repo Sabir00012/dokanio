@@ -242,8 +242,19 @@ public class SaleService : ISaleService
     /// </summary>
     public async Task<Sale> CreateSaleAsync(string invoiceNumber, Guid deviceId)
     {
+        // Resolve UserId from device ID BEFORE validation (use first active user on this device)
+        var usersOnDevice = await _userRepository.FindAsync(u => u.DeviceId == deviceId && u.IsActive && !u.IsDeleted);
+        var deviceUser = usersOnDevice.FirstOrDefault();
+        
+        if (deviceUser == null)
+        {
+            throw new InvalidOperationException($"No active users found on device {deviceId}. Cannot create sale without an active user.");
+        }
+        
+        var userId = deviceUser.Id;
+
         // Requirement 8.2: validate all inputs before processing
-        var validation = await _validationService.ValidateSaleCreationAsync(invoiceNumber, deviceId, Guid.NewGuid());
+        var validation = await _validationService.ValidateSaleCreationAsync(invoiceNumber, deviceId, userId);
         if (!validation.IsValid)
         {
             var firstError = validation.Errors.First();
@@ -266,11 +277,6 @@ public class SaleService : ISaleService
 
         // Resolve ShopId from device ID (Requirement 1.2: validate device)
         var shopId = await ResolveShopIdAsync(deviceId);
-
-        // Resolve UserId from device ID (use first active user on this device)
-        var usersOnDevice = await _userRepository.FindAsync(u => u.DeviceId == deviceId && u.IsActive && !u.IsDeleted);
-        var deviceUser = usersOnDevice.FirstOrDefault();
-        var userId = deviceUser?.Id ?? Guid.Empty;
 
         var sale = new Sale
         {

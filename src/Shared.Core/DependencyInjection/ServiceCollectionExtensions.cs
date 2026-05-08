@@ -106,7 +106,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEnhancedAuditService, EnhancedAuditService>();
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<IAuthorizationService, AuthorizationService>();
-        services.AddSingleton<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
         
         // Register comprehensive logging service
         services.AddScoped<IComprehensiveLoggingService, ComprehensiveLoggingService>();

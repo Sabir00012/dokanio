@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Moq;
 using Shared.Core.Data;
 using Shared.Core.Entities;
 using Shared.Core.Enums;
 using Shared.Core.Services;
+using Shared.Core.Repositories;
 using Shared.Core.DependencyInjection;
 using System.Diagnostics;
 using Xunit;
@@ -43,18 +45,44 @@ public class PerformanceOptimizationTests : IDisposable
 
         var services = new ServiceCollection();
         
-        // Use the shared core DI registration to ensure all dependencies are met
-        services.AddSharedCoreInMemory();
-        
-        // Remove the InMemory options registration to replace with Sqlite for this test
-        var dbContextDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<PosDbContext>));
-        if (dbContextDescriptor != null) services.Remove(dbContextDescriptor);
-        
-        // Add Sqlite options using the open connection
+        // Add DbContext with Sqlite FIRST before calling AddSharedCoreInMemory
         services.AddDbContext<PosDbContext>(options =>
             options.UseSqlite(_connection));
-            
-        // No need to manually register other services as AddSharedCoreInMemory covers them
+        
+        // Now add the rest of the shared core services (but skip the DbContext registration)
+        // We need to manually register services without the DbContext
+        services.AddLogging(b => b.AddConsole().SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Warning));
+        
+        // Register all services except DbContext
+        services.AddScoped<ISaleService, SaleService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IInventoryService, InventoryService>();
+        services.AddScoped<IPerformanceOptimizationService, PerformanceOptimizationService>();
+        services.AddScoped<IDatabaseQueryOptimizationService, DatabaseQueryOptimizationService>();
+        services.AddScoped<ICachingStrategyService, CachingStrategyService>();
+        services.AddScoped<IValidationService, ValidationService>();
+        services.AddScoped<IConfigurationService, ConfigurationService>();
+        services.AddScoped<ILicenseService, LicenseService>();
+        services.AddScoped<ICurrentUserService>(provider =>
+        {
+            var mockService = new Mock<ICurrentUserService>();
+            var deviceId = Guid.NewGuid();
+            mockService.Setup(x => x.GetDeviceId()).Returns(deviceId);
+            mockService.Setup(x => x.GetUserId()).Returns(Guid.NewGuid());
+            return mockService.Object;
+        });
+        
+        // Register repositories
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<ISaleRepository, SaleRepository>();
+        services.AddScoped<IStockRepository, StockRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IBusinessRepository, BusinessRepository>();
+        services.AddScoped<IShopRepository, ShopRepository>();
+        services.AddScoped<IConfigurationRepository, ConfigurationRepository>();
+        services.AddScoped<ILicenseRepository, LicenseRepository>();
+        services.AddScoped<IAuditLoggingService, AuditLoggingService>();
+        services.AddScoped<ITransactionLogService, TransactionLogService>();
 
         _serviceProvider = services.BuildServiceProvider();
         _context = _serviceProvider.GetRequiredService<PosDbContext>();

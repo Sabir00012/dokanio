@@ -282,8 +282,8 @@ public class SalesServiceIntegrationTests : IDisposable
 
         // Act 3: Calculate full sale total (includes membership discount)
         var calculation = await _saleService.CalculateFullSaleTotalAsync(sale.Id);
-        Assert.True(calculation.DiscountAmount > 0, "Gold member should receive discount");
-        _output.WriteLine($"Step 3: Calculated totals. Discount: {calculation.DiscountAmount:C}, Final: {calculation.FinalTotal:C}");
+        Assert.True(calculation.MembershipDiscountAmount > 0, "Gold member should receive membership discount");
+        _output.WriteLine($"Step 3: Calculated totals. Membership Discount: {calculation.MembershipDiscountAmount:C}, Final: {calculation.FinalTotal:C}");
 
         // Act 4: Complete sale
         var completedSale = await _saleService.CompleteSaleAsync(sale.Id, PaymentMethod.Card);

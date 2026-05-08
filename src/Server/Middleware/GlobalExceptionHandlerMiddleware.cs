@@ -16,23 +16,20 @@ public class GlobalExceptionHandlerMiddleware
     private readonly ILogger<GlobalExceptionHandlerMiddleware> _logger;
     private readonly IHostEnvironment _env;
     private readonly IGlobalExceptionHandler _globalExceptionHandler;
-    private readonly ICurrentUserService _currentUserService;
 
     public GlobalExceptionHandlerMiddleware(
         RequestDelegate next, 
         ILogger<GlobalExceptionHandlerMiddleware> logger, 
         IHostEnvironment env,
-        IGlobalExceptionHandler globalExceptionHandler,
-        ICurrentUserService currentUserService)
+        IGlobalExceptionHandler globalExceptionHandler)
     {
         _next = next;
         _logger = logger;
         _env = env;
         _globalExceptionHandler = globalExceptionHandler;
-        _currentUserService = currentUserService;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(HttpContext context, ICurrentUserService currentUserService)
     {
         try
         {
@@ -53,19 +50,19 @@ public class GlobalExceptionHandlerMiddleware
             }
 
             context.Response.Clear();
-            await HandleExceptionAsync(context, ex);
+            await HandleExceptionAsync(context, ex, currentUserService);
         }
     }
 
-    private async Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private async Task HandleExceptionAsync(HttpContext context, Exception exception, ICurrentUserService currentUserService)
     {
         context.Response.ContentType = "application/json";
         
         try
         {
-            // Get device and user context
-            var deviceId = _currentUserService.GetDeviceId();
-            var userId = _currentUserService.GetUserId();
+            // Get device and user context from the scoped service
+            var deviceId = currentUserService.GetDeviceId();
+            var userId = currentUserService.GetUserId();
             var requestContext = $"HTTP {context.Request.Method} {context.Request.Path}";
 
             // Use comprehensive exception handler
