@@ -7,6 +7,9 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -69,6 +72,8 @@ jobs:
   code-quality:
     runs-on: ubuntu-latest
     name: Code Quality
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout code
