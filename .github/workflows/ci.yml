@@ -72,6 +72,8 @@ jobs:
   code-quality:
     runs-on: ubuntu-latest
     name: Code Quality
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout code
