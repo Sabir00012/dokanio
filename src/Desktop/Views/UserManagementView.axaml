@@ -1,0 +1,188 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Desktop.ViewModels"
+             x:Class="Desktop.Views.UserManagementView"
+             x:DataType="vm:UserManagementViewModel">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="0" Classes="card" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="User Management" FontWeight="Bold" FontSize="18" VerticalAlignment="Center"/>
+
+                <Button Grid.Column="1"
+                        Content="🔄 Refresh"
+                        Command="{Binding LoadUsersCommand}"
+                        IsEnabled="{Binding !IsLoading}"
+                        Margin="0,0,10,0"/>
+
+                <Button Grid.Column="2"
+                        Content="➕ Add User"
+                        Command="{Binding OpenCreateUserDialogCommand}"
+                        IsEnabled="{Binding CanManageUsers}"
+                        Classes="accent"/>
+            </Grid>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="350"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- User List -->
+            <Border Grid.Column="0" Classes="card" Margin="0,0,10,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Active Users" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding Users}"
+                              SelectedItem="{Binding SelectedUser}"
+                              AutoGenerateColumns="False"
+                              CanUserReorderColumns="False"
+                              CanUserResizeColumns="True"
+                              GridLinesVisibility="Horizontal">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Username" Binding="{Binding Username}" Width="*"/>
+                            <DataGridTextColumn Header="Full Name" Binding="{Binding FullName}" Width="*"/>
+                            <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="*"/>
+                            <DataGridTextColumn Header="Role" Binding="{Binding Role}" Width="120"/>
+                            <DataGridTemplateColumn Header="Status" Width="80">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding IsActive, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Active|Inactive'}"
+                                                   Foreground="{Binding IsActive, Converter={StaticResource BoolToColorConverter}}"
+                                                   VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Actions" Width="100">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="Deactivate"
+                                                Command="{Binding $parent[UserControl].((vm:UserManagementViewModel)DataContext).DeactivateUserCommand}"
+                                                CommandParameter="{Binding}"
+                                                IsEnabled="{Binding IsActive}"
+                                                Classes="danger"
+                                                FontSize="11"
+                                                Padding="6,3"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <!-- Create User Form -->
+            <Border Grid.Column="1" Classes="card" IsVisible="{Binding IsCreateUserDialogOpen}">
+                <ScrollViewer>
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Create New User" FontWeight="Bold" FontSize="16"/>
+
+                        <StackPanel>
+                            <TextBlock Text="Username *" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <TextBox Text="{Binding NewUsername}" Watermark="Enter username"/>
+                        </StackPanel>
+
+                        <StackPanel>
+                            <TextBlock Text="Full Name *" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <TextBox Text="{Binding NewFullName}" Watermark="Enter full name"/>
+                        </StackPanel>
+
+                        <StackPanel>
+                            <TextBlock Text="Email *" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <TextBox Text="{Binding NewEmail}" Watermark="Enter email address"/>
+                        </StackPanel>
+
+                        <StackPanel>
+                            <TextBlock Text="Password *" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <TextBox Text="{Binding NewPassword}"
+                                     Watermark="Min. 6 characters"
+                                     PasswordChar="●"/>
+                        </StackPanel>
+
+                        <StackPanel>
+                            <TextBlock Text="Role" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <ComboBox ItemsSource="{Binding UserRoles}"
+                                      SelectedItem="{Binding NewUserRole}"
+                                      HorizontalAlignment="Stretch"/>
+                        </StackPanel>
+
+                        <StackPanel Spacing="8">
+                            <Button Content="Create User"
+                                    Command="{Binding CreateUserCommand}"
+                                    IsEnabled="{Binding !IsLoading}"
+                                    Classes="accent"
+                                    HorizontalAlignment="Stretch"/>
+                            <Button Content="Cancel"
+                                    Command="{Binding CloseCreateUserDialogCommand}"
+                                    HorizontalAlignment="Stretch"/>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding ErrorMessage}"
+                                   Foreground="Red"
+                                   IsVisible="{Binding HasError}"
+                                   TextWrapping="Wrap"/>
+
+                        <TextBlock Text="{Binding SuccessMessage}"
+                                   Foreground="Green"
+                                   IsVisible="{Binding SuccessMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Placeholder when form is closed -->
+            <Border Grid.Column="1" Classes="card" IsVisible="{Binding !IsCreateUserDialogOpen}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                    <TextBlock Text="Select a user to manage"
+                               FontSize="14"
+                               Opacity="0.7"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="or click 'Add User' to create a new one"
+                               FontSize="12"
+                               Opacity="0.5"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding ErrorMessage}"
+                               Foreground="Red"
+                               IsVisible="{Binding HasError}"
+                               TextWrapping="Wrap"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding SuccessMessage}"
+                               Foreground="Green"
+                               IsVisible="{Binding SuccessMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                               TextWrapping="Wrap"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Loading Overlay -->
+        <Border Grid.RowSpan="2"
+                Background="#80000000"
+                IsVisible="{Binding IsLoading}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                <ProgressBar IsIndeterminate="True" Width="200"/>
+                <TextBlock Text="Loading..." Foreground="White" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

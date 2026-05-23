@@ -15,7 +15,7 @@ namespace Shared.Core.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "8.0.1");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.7");
 
             modelBuilder.Entity("Shared.Core.Entities.AuditLog", b =>
                 {
@@ -172,6 +172,15 @@ namespace Shared.Core.Migrations
 
                     b.HasIndex("Type");
 
+                    b.HasIndex("SyncStatus", "UpdatedAt")
+                        .HasDatabaseName("IX_Business_Sync_Updated");
+
+                    b.HasIndex("Type", "IsActive")
+                        .HasDatabaseName("IX_Business_Type_Active");
+
+                    b.HasIndex("OwnerId", "IsActive", "IsDeleted")
+                        .HasDatabaseName("IX_Business_Owner_Active_NotDeleted");
+
                     b.ToTable("Businesses");
                 });
 
@@ -205,6 +214,9 @@ namespace Shared.Core.Migrations
                     b.Property<DateTime?>("ServerSyncedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ShopId")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("SyncStatus")
                         .HasColumnType("INTEGER");
 
@@ -212,6 +224,9 @@ namespace Shared.Core.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("UserId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Value")
@@ -309,13 +324,181 @@ namespace Shared.Core.Migrations
                     b.HasIndex("MembershipNumber")
                         .IsUnique();
 
+                    b.HasIndex("Phone")
+                        .HasDatabaseName("IX_Customer_Phone");
+
                     b.HasIndex("SyncStatus");
 
                     b.HasIndex("Tier");
 
                     b.HasIndex("TotalSpent");
 
+                    b.HasIndex("Tier", "IsActive")
+                        .HasDatabaseName("IX_Customer_Tier_Active");
+
+                    b.HasIndex("TotalSpent", "Tier")
+                        .HasDatabaseName("IX_Customer_Spent_Tier");
+
+                    b.HasIndex("Phone", "IsActive", "IsDeleted")
+                        .HasDatabaseName("IX_Customer_Phone_Active_NotDeleted");
+
                     b.ToTable("Customers");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.CustomerMembership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ExpiryDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("JoinDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastUpdated")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ServerSyncedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SyncStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Tier")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("TotalSpentForTier")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId")
+                        .IsUnique();
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("ExpiryDate");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("JoinDate");
+
+                    b.HasIndex("SyncStatus");
+
+                    b.HasIndex("Tier");
+
+                    b.HasIndex("ExpiryDate", "IsActive")
+                        .HasDatabaseName("IX_CustomerMembership_Expiry_Active")
+                        .HasFilter("ExpiryDate IS NOT NULL");
+
+                    b.HasIndex("Tier", "IsActive")
+                        .HasDatabaseName("IX_CustomerMembership_Tier_Active");
+
+                    b.HasIndex("CustomerId", "IsActive", "IsDeleted")
+                        .HasDatabaseName("IX_CustomerMembership_Customer_Active_NotDeleted");
+
+                    b.ToTable("CustomerMemberships");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.CustomerPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ServerSyncedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SyncStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("Key");
+
+                    b.HasIndex("SyncStatus");
+
+                    b.HasIndex("CustomerId", "Key")
+                        .IsUnique()
+                        .HasDatabaseName("IX_CustomerPreference_Customer_Key");
+
+                    b.HasIndex("CustomerId", "Category", "IsActive")
+                        .HasDatabaseName("IX_CustomerPreference_Customer_Category_Active");
+
+                    b.ToTable("CustomerPreferences");
                 });
 
             modelBuilder.Entity("Shared.Core.Entities.Discount", b =>
@@ -497,6 +680,95 @@ namespace Shared.Core.Migrations
                     b.ToTable("Licenses");
                 });
 
+            modelBuilder.Entity("Shared.Core.Entities.MembershipBenefit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CustomerMembershipId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("MaxUsages")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ServerSyncedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("StartDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SyncStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UsageCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerMembershipId");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("EndDate");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("StartDate");
+
+                    b.HasIndex("SyncStatus");
+
+                    b.HasIndex("Type");
+
+                    b.HasIndex("Type", "IsActive")
+                        .HasDatabaseName("IX_MembershipBenefit_Type_Active");
+
+                    b.HasIndex("CustomerMembershipId", "IsActive", "IsDeleted")
+                        .HasDatabaseName("IX_MembershipBenefit_Membership_Active_NotDeleted");
+
+                    b.HasIndex("StartDate", "EndDate", "IsActive")
+                        .HasDatabaseName("IX_MembershipBenefit_DateRange_Active");
+
+                    b.ToTable("MembershipBenefits");
+                });
+
             modelBuilder.Entity("Shared.Core.Entities.Product", b =>
                 {
                     b.Property<Guid>("Id")
@@ -539,6 +811,12 @@ namespace Shared.Core.Migrations
                     b.Property<bool>("IsWeightBased")
                         .HasColumnType("INTEGER");
 
+                    b.Property<decimal?>("MaxWeightKg")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("MinWeightKg")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -562,6 +840,9 @@ namespace Shared.Core.Migrations
                     b.Property<Guid>("ShopId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("SupplierId")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("SyncStatus")
                         .HasColumnType("INTEGER");
 
@@ -577,7 +858,7 @@ namespace Shared.Core.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ShopId", "Barcode")
+                    b.HasIndex("Barcode")
                         .IsUnique();
 
                     b.HasIndex("Category");
@@ -592,7 +873,25 @@ namespace Shared.Core.Migrations
 
                     b.HasIndex("ShopId");
 
+                    b.HasIndex("SupplierId");
+
                     b.HasIndex("SyncStatus");
+
+                    b.HasIndex("Barcode", "ShopId")
+                        .HasDatabaseName("IX_Product_Barcode_Shop");
+
+                    b.HasIndex("ExpiryDate", "ShopId")
+                        .HasDatabaseName("IX_Product_Expiry_Shop")
+                        .HasFilter("ExpiryDate IS NOT NULL");
+
+                    b.HasIndex("Name", "ShopId")
+                        .HasDatabaseName("IX_Product_Name_Shop");
+
+                    b.HasIndex("ShopId", "Category", "IsActive")
+                        .HasDatabaseName("IX_Product_Shop_Category_Active");
+
+                    b.HasIndex("ShopId", "IsActive", "IsDeleted")
+                        .HasDatabaseName("IX_Product_Shop_Active_NotDeleted");
 
                     b.ToTable("Products");
                 });
@@ -601,6 +900,24 @@ namespace Shared.Core.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("AmountPaid")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ChangeAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
@@ -619,6 +936,10 @@ namespace Shared.Core.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal>("FinalTotal")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("InvoiceNumber")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -626,6 +947,9 @@ namespace Shared.Core.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("LastModified")
+                        .HasColumnType("TEXT");
 
                     b.Property<decimal>("MembershipDiscountAmount")
                         .HasPrecision(10, 2)
@@ -640,6 +964,13 @@ namespace Shared.Core.Migrations
                     b.Property<Guid>("ShopId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("SyncStatus")
                         .HasColumnType("INTEGER");
 
@@ -649,6 +980,17 @@ namespace Shared.Core.Migrations
 
                     b.Property<decimal>("TotalAmount")
                         .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalDiscount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalTax")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("UserId")
@@ -669,11 +1011,94 @@ namespace Shared.Core.Migrations
 
                     b.HasIndex("ShopId");
 
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_Sale_Status");
+
                     b.HasIndex("SyncStatus");
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("CreatedAt", "TotalAmount")
+                        .HasDatabaseName("IX_Sale_Created_Amount");
+
+                    b.HasIndex("CustomerId", "CreatedAt")
+                        .HasDatabaseName("IX_Sale_Customer_Created")
+                        .HasFilter("CustomerId IS NOT NULL");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("IX_Sale_User_Created");
+
+                    b.HasIndex("ShopId", "CreatedAt", "IsDeleted")
+                        .HasDatabaseName("IX_Sale_Shop_Created_NotDeleted");
+
+                    b.HasIndex("ShopId", "PaymentMethod", "CreatedAt")
+                        .HasDatabaseName("IX_Sale_Shop_Payment_Created");
+
                     b.ToTable("Sales");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.SaleAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventDescription")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(45)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("NewValues")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OldValues")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SaleId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("SaleId")
+                        .HasDatabaseName("IX_SaleAuditLog_SaleId");
+
+                    b.HasIndex("Timestamp")
+                        .HasDatabaseName("IX_SaleAuditLog_Timestamp");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("IX_SaleAuditLog_UserId");
+
+                    b.HasIndex("SaleId", "Timestamp")
+                        .HasDatabaseName("IX_SaleAuditLog_Sale_Timestamp");
+
+                    b.HasIndex("UserId", "Timestamp")
+                        .HasDatabaseName("IX_SaleAuditLog_User_Timestamp");
+
+                    b.ToTable("SaleAuditLogs");
                 });
 
             modelBuilder.Entity("Shared.Core.Entities.SaleDiscount", b =>
@@ -685,28 +1110,76 @@ namespace Shared.Core.Migrations
                     b.Property<DateTime>("AppliedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<decimal>("DiscountAmount")
+                    b.Property<Guid?>("AuthorizedBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("CalculatedAmount")
                         .HasPrecision(10, 2)
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("DiscountId")
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("DiscountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DiscountName")
+                        .IsRequired()
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("DiscountReason")
-                        .IsRequired()
-                        .HasMaxLength(200)
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DiscountType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("FixedAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("PercentageValue")
+                        .HasPrecision(5, 2)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("SaleId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ServerSyncedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SyncStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("AppliedAt");
+                    b.HasIndex("AppliedAt")
+                        .HasDatabaseName("IX_SaleDiscount_AppliedAt");
 
-                    b.HasIndex("DiscountId");
+                    b.HasIndex("DiscountId")
+                        .HasDatabaseName("IX_SaleDiscount_DiscountId")
+                        .HasFilter("DiscountId IS NOT NULL");
 
-                    b.HasIndex("SaleId");
+                    b.HasIndex("DiscountType")
+                        .HasDatabaseName("IX_SaleDiscount_DiscountType");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("SaleId")
+                        .HasDatabaseName("IX_SaleDiscount_SaleId");
 
                     b.ToTable("SaleDiscounts");
                 });
@@ -717,6 +1190,10 @@ namespace Shared.Core.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("BatchNumber")
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
@@ -724,10 +1201,41 @@ namespace Shared.Core.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ExpiryDate")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsWeightBased")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("LineDiscount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("LineSubtotal")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("LineTax")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProductCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("ProductId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Quantity")
@@ -754,6 +1262,10 @@ namespace Shared.Core.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BatchNumber")
+                        .HasDatabaseName("IX_SaleItem_BatchNumber")
+                        .HasFilter("BatchNumber IS NOT NULL");
+
                     b.HasIndex("IsDeleted");
 
                     b.HasIndex("ProductId");
@@ -761,6 +1273,193 @@ namespace Shared.Core.Migrations
                     b.HasIndex("SaleId");
 
                     b.ToTable("SaleItems");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.SaleItemDiscount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SaleDiscountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SaleItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SaleDiscountId")
+                        .HasDatabaseName("IX_SaleItemDiscount_SaleDiscountId");
+
+                    b.HasIndex("SaleItemId")
+                        .HasDatabaseName("IX_SaleItemDiscount_SaleItemId");
+
+                    b.HasIndex("SaleItemId", "SaleDiscountId")
+                        .HasDatabaseName("IX_SaleItemDiscount_SaleItemId_SaleDiscountId");
+
+                    b.ToTable("SaleItemDiscounts");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.SalePayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("AmountTendered")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ChangeAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SaleId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ServerSyncedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SyncStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("SaleId")
+                        .HasDatabaseName("IX_SalePayment_SaleId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_SalePayment_Status");
+
+                    b.HasIndex("SaleId", "Status")
+                        .HasDatabaseName("IX_SalePayment_SaleId_Status");
+
+                    b.ToTable("SalePayments");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.SaleSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("LastModified")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("SaleId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionData")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ShopId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TabName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("LastModified");
+
+                    b.HasIndex("SaleId");
+
+                    b.HasIndex("ShopId");
+
+                    b.HasIndex("State");
+
+                    b.HasIndex("TabName");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SaleSessions");
                 });
 
             modelBuilder.Entity("Shared.Core.Entities.Shop", b =>
@@ -875,6 +1574,9 @@ namespace Shared.Core.Migrations
                     b.Property<int>("SyncStatus")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DeviceId");
@@ -888,6 +1590,61 @@ namespace Shared.Core.Migrations
                     b.HasIndex("SyncStatus");
 
                     b.ToTable("Stock");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.Supplier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContactPerson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastSyncedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SyncStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Suppliers");
                 });
 
             modelBuilder.Entity("Shared.Core.Entities.User", b =>
@@ -1134,6 +1891,15 @@ namespace Shared.Core.Migrations
 
                     b.HasIndex("IsProcessed");
 
+                    b.HasIndex("DeviceId", "IsProcessed")
+                        .HasDatabaseName("IX_TransactionLog_Device_IsProcessed");
+
+                    b.HasIndex("IsProcessed", "CreatedAt")
+                        .HasDatabaseName("IX_TransactionLog_IsProcessed_CreatedAt");
+
+                    b.HasIndex("EntityType", "EntityId", "CreatedAt")
+                        .HasDatabaseName("IX_TransactionLog_Entity_CreatedAt");
+
                     b.ToTable("TransactionLogs");
                 });
 
@@ -1158,6 +1924,28 @@ namespace Shared.Core.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("Shared.Core.Entities.CustomerMembership", b =>
+                {
+                    b.HasOne("Shared.Core.Entities.Customer", "Customer")
+                        .WithOne("Membership")
+                        .HasForeignKey("Shared.Core.Entities.CustomerMembership", "CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.CustomerPreference", b =>
+                {
+                    b.HasOne("Shared.Core.Entities.Customer", "Customer")
+                        .WithMany("Preferences")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("Shared.Core.Entities.Discount", b =>
                 {
                     b.HasOne("Shared.Core.Entities.Product", "Product")
@@ -1168,6 +1956,17 @@ namespace Shared.Core.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("Shared.Core.Entities.MembershipBenefit", b =>
+                {
+                    b.HasOne("Shared.Core.Entities.CustomerMembership", "CustomerMembership")
+                        .WithMany("Benefits")
+                        .HasForeignKey("CustomerMembershipId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CustomerMembership");
+                });
+
             modelBuilder.Entity("Shared.Core.Entities.Product", b =>
                 {
                     b.HasOne("Shared.Core.Entities.Shop", "Shop")
@@ -1175,6 +1974,10 @@ namespace Shared.Core.Migrations
                         .HasForeignKey("ShopId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("Shared.Core.Entities.Supplier", null)
+                        .WithMany("Products")
+                        .HasForeignKey("SupplierId");
 
                     b.Navigation("Shop");
                 });
@@ -1189,7 +1992,7 @@ namespace Shared.Core.Migrations
                     b.HasOne("Shared.Core.Entities.Shop", "Shop")
                         .WithMany("Sales")
                         .HasForeignKey("ShopId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("Shared.Core.Entities.User", "User")
@@ -1210,8 +2013,7 @@ namespace Shared.Core.Migrations
                     b.HasOne("Shared.Core.Entities.Discount", "Discount")
                         .WithMany("SaleDiscounts")
                         .HasForeignKey("DiscountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Shared.Core.Entities.Sale", "Sale")
                         .WithMany("AppliedDiscounts")
@@ -1241,6 +2043,69 @@ namespace Shared.Core.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Sale");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.SaleItemDiscount", b =>
+                {
+                    b.HasOne("Shared.Core.Entities.SaleDiscount", "SaleDiscount")
+                        .WithMany("SaleItemDiscounts")
+                        .HasForeignKey("SaleDiscountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Shared.Core.Entities.SaleItem", "SaleItem")
+                        .WithMany("AppliedDiscounts")
+                        .HasForeignKey("SaleItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SaleDiscount");
+
+                    b.Navigation("SaleItem");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.SalePayment", b =>
+                {
+                    b.HasOne("Shared.Core.Entities.Sale", "Sale")
+                        .WithMany("Payments")
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sale");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.SaleSession", b =>
+                {
+                    b.HasOne("Shared.Core.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Shared.Core.Entities.Sale", "Sale")
+                        .WithMany()
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Shared.Core.Entities.Shop", "Shop")
+                        .WithMany()
+                        .HasForeignKey("ShopId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Shared.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Sale");
+
+                    b.Navigation("Shop");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Shared.Core.Entities.Shop", b =>
@@ -1311,7 +2176,16 @@ namespace Shared.Core.Migrations
 
             modelBuilder.Entity("Shared.Core.Entities.Customer", b =>
                 {
+                    b.Navigation("Membership");
+
+                    b.Navigation("Preferences");
+
                     b.Navigation("Sales");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.CustomerMembership", b =>
+                {
+                    b.Navigation("Benefits");
                 });
 
             modelBuilder.Entity("Shared.Core.Entities.Discount", b =>
@@ -1331,6 +2205,18 @@ namespace Shared.Core.Migrations
                     b.Navigation("AppliedDiscounts");
 
                     b.Navigation("Items");
+
+                    b.Navigation("Payments");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.SaleDiscount", b =>
+                {
+                    b.Navigation("SaleItemDiscounts");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.SaleItem", b =>
+                {
+                    b.Navigation("AppliedDiscounts");
                 });
 
             modelBuilder.Entity("Shared.Core.Entities.Shop", b =>
@@ -1342,6 +2228,11 @@ namespace Shared.Core.Migrations
                     b.Navigation("Sales");
 
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("Shared.Core.Entities.Supplier", b =>
+                {
+                    b.Navigation("Products");
                 });
 
             modelBuilder.Entity("Shared.Core.Entities.User", b =>

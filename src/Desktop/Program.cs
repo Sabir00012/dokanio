@@ -92,6 +92,28 @@ public partial class App : Application
                     desktop.MainWindow = mainWindow;
                     loginWindow.Close();
                     mainWindow.Show();
+
+                    // When session expires, redirect back to login
+                    mainViewModel.SessionExpired += (_, _) =>
+                    {
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        {
+                            var newLoginViewModel = _serviceProvider.GetRequiredService<LoginViewModel>();
+                            var newLoginWindow = new LoginWindow(newLoginViewModel);
+                            desktop.MainWindow = newLoginWindow;
+                            mainWindow.Close();
+                            newLoginWindow.Show();
+
+                            newLoginViewModel.LoginSuccessful += (s2, u2) =>
+                            {
+                                var newMainViewModel = _serviceProvider.GetRequiredService<MainViewModel>();
+                                var newMainWindow = new MainWindow(newMainViewModel);
+                                desktop.MainWindow = newMainWindow;
+                                newLoginWindow.Close();
+                                newMainWindow.Show();
+                            };
+                        });
+                    };
                 };
             }
             else

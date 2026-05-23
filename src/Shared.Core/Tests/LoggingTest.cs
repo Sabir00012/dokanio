@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Shared.Core.Data;
 using Shared.Core.Services;
 using Xunit;
+using CoreLogLevel = Shared.Core.Services.LogLevel;
 
 namespace Shared.Core.Tests;
 
@@ -53,7 +53,7 @@ public class LoggingTest : IDisposable
         var userId = Guid.NewGuid();
         var message = "Test log message";
         var category = LogCategory.System;
-        var level = Services.LogLevel.Information;
+        var level = CoreLogLevel.Information;
         var additionalData = new { TestProperty = "TestValue" };
 
         // Act
@@ -89,7 +89,7 @@ public class LoggingTest : IDisposable
         Assert.Single(logEntries);
         
         var logEntry = logEntries.First();
-        Assert.Equal(Services.LogLevel.Error, logEntry.Level);
+        Assert.Equal(CoreLogLevel.Error, logEntry.Level);
         Assert.Equal(category, logEntry.Category);
         Assert.Equal(deviceId, logEntry.DeviceId);
         Assert.NotNull(logEntry.ExceptionDetails);
@@ -130,8 +130,8 @@ public class LoggingTest : IDisposable
         await _loggingService.LogErrorAsync(errorMessage, LogCategory.System, deviceId);
 
         // Act
-        var infoLogs = await _loggingService.GetLogsByLevelAsync(Services.LogLevel.Information);
-        var errorLogs = await _loggingService.GetLogsByLevelAsync(Services.LogLevel.Error);
+        var infoLogs = await _loggingService.GetLogsByLevelAsync(CoreLogLevel.Information);
+        var errorLogs = await _loggingService.GetLogsByLevelAsync(CoreLogLevel.Error);
 
         // Assert
         Assert.Single(infoLogs.Where(log => log.Message == infoMessage));

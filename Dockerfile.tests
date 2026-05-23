@@ -1,0 +1,18 @@
+# Multi-stage build for running tests (.NET 10)
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY ["src/Shared.Core/Shared.Core.csproj", "src/Shared.Core/"]
+COPY ["src/Mobile/Tests/Mobile.Tests.csproj", "src/Mobile/Tests/"]
+RUN dotnet restore "src/Shared.Core/Shared.Core.csproj"
+RUN dotnet restore "src/Mobile/Tests/Mobile.Tests.csproj"
+COPY . .
+
+# Run tests
+FROM build AS test
+WORKDIR /src
+RUN dotnet test "src/Shared.Core/Shared.Core.csproj" -c Release --no-build --logger "console;verbosity=detailed"
+RUN dotnet test "src/Mobile/Tests/Mobile.Tests.csproj" -c Release --no-build --logger "console;verbosity=detailed"
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
+WORKDIR /app
+# Test results are captured during build

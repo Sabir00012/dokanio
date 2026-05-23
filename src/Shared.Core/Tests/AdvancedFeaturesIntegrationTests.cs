@@ -80,6 +80,13 @@ public class AdvancedFeaturesIntegrationTests : IDisposable
         // Add user repository and authorization service required by SaleService
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IAuthorizationService, AuthorizationService>();
+        services.AddScoped<IShopRepository, ShopRepository>();
+        services.AddScoped<IValidationService, ValidationService>();
+        
+        // Add caching and concurrency services required by SaleService (Requirements 9.1, 9.4, 9.5)
+        services.AddMemoryCache();
+        services.AddScoped<ISalesCacheService, SalesCacheService>();
+        services.AddSingleton<ConcurrentSaleOperationGuard>();
         
         // Add device context service required by DiscountService
         services.AddSingleton<IDeviceContextService, DeviceContextService>();

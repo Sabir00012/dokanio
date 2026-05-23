@@ -17,6 +17,7 @@ public partial class AIInventoryViewModel : BaseViewModel
     private readonly IBusinessManagementService _businessManagementService;
     private readonly IAIAnalyticsEngine _aiAnalyticsEngine;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IAuthorizationService _authorizationService;
 
     [ObservableProperty]
     private ObservableCollection<BusinessResponse> businesses = new();
@@ -88,11 +89,13 @@ public partial class AIInventoryViewModel : BaseViewModel
     private int highPriorityReorders;
 
     public AIInventoryViewModel(
+        IAuthorizationService authorizationService,
         IEnhancedInventoryService enhancedInventoryService,
         IBusinessManagementService businessManagementService,
         IAIAnalyticsEngine aiAnalyticsEngine,
         ICurrentUserService currentUserService)
     {
+        _authorizationService = authorizationService;
         _enhancedInventoryService = enhancedInventoryService;
         _businessManagementService = businessManagementService;
         _aiAnalyticsEngine = aiAnalyticsEngine;
@@ -100,9 +103,8 @@ public partial class AIInventoryViewModel : BaseViewModel
         Title = "AI Inventory Management";
     }
 
-    public bool CanManageInventory => _currentUserService.CurrentUser?.Role == UserRole.BusinessOwner ||
-                                      _currentUserService.CurrentUser?.Role == UserRole.ShopManager ||
-                                      _currentUserService.CurrentUser?.Role == UserRole.InventoryStaff;
+    public bool CanManageInventory => _currentUserService.CurrentUser != null &&
+                                      _authorizationService.CanManageInventory(_currentUserService.CurrentUser);
 
     [RelayCommand]
     private async Task LoadBusinessesAsync()

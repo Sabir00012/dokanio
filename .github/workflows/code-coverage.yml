@@ -1,0 +1,136 @@
+name: Code Coverage
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    name: Generate Coverage Report
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: pos_test
+          POSTGRES_USER: pos_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+
+      - name: Install coverage tools
+        run: dotnet tool install -g dotnet-coverage
+
+      - name: Restore dependencies
+        run: dotnet restore OfflineFirstPOS.sln
+
+      - name: Build solution
+        run: dotnet build OfflineFirstPOS.sln -c Release --no-restore
+
+      - name: Run tests with coverage (Shared.Core)
+        run: |
+          dotnet test src/Shared.Core/Shared.Core.csproj \
+            -c Release \
+            --no-build \
+            --logger "console;verbosity=detailed" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage
+
+      - name: Run tests with coverage (Mobile)
+        run: |
+          dotnet test src/Mobile/Tests/Mobile.Tests.csproj \
+            -c Release \
+            --no-build \
+            --logger "console;verbosity=detailed" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage
+
+      - name: Merge coverage reports
+        run: |
+          dotnet coverage merge \
+            ./coverage/**/*.cobertura.xml \
+            -o ./coverage/merged.cobertura.xml \
+            -f cobertura
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/merged.cobertura.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Generate coverage report
+        run: |
+          dotnet coverage report \
+            ./coverage/merged.cobertura.xml \
+            --format html \
+            --output ./coverage-report
+
+      - name: Upload coverage report as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: ./coverage-report/
+          retention-days: 30
+
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const coverage = fs.readFileSync('./coverage/merged.cobertura.xml', 'utf8');
+            
+            // Extract coverage percentage from XML
+            const match = coverage.match(/line-rate="([^"]+)"/);
+            const lineRate = match ? (parseFloat(match[1]) * 100).toFixed(2) : 'N/A';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Code Coverage Report\n\n📊 **Line Coverage**: ${lineRate}%\n\n[View detailed report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+            });
+
+      - name: Check coverage threshold
+        run: |
+          # Extract line coverage percentage
+          COVERAGE=$(grep -oP 'line-rate="\K[^"]+' ./coverage/merged.cobertura.xml | head -1)
+          COVERAGE_PERCENT=$(echo "scale=2; $COVERAGE * 100" | bc)
+          THRESHOLD=70
+          
+          echo "Code Coverage: $COVERAGE_PERCENT%"
+          echo "Threshold: $THRESHOLD%"
+          
+          if (( $(echo "$COVERAGE_PERCENT < $THRESHOLD" | bc -l) )); then
+            echo "❌ Coverage below threshold!"
+            exit 1
+          else
+            echo "✅ Coverage meets threshold!"
+          fi

@@ -17,6 +17,7 @@ public partial class AdvancedReportsViewModel : BaseViewModel
     private readonly IBusinessManagementService _businessManagementService;
     private readonly IReportService _reportService;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IAuthorizationService _authorizationService;
 
     [ObservableProperty]
     private ObservableCollection<BusinessResponse> businesses = new();
@@ -87,17 +88,19 @@ public partial class AdvancedReportsViewModel : BaseViewModel
         IDashboardService dashboardService,
         IBusinessManagementService businessManagementService,
         IReportService reportService,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IAuthorizationService authorizationService)
     {
         _dashboardService = dashboardService;
         _businessManagementService = businessManagementService;
         _reportService = reportService;
         _currentUserService = currentUserService;
+        _authorizationService = authorizationService;
         Title = "Advanced Reports & Analytics";
     }
 
-    public bool CanViewReports => _currentUserService.CurrentUser?.Role == UserRole.BusinessOwner ||
-                                  _currentUserService.CurrentUser?.Role == UserRole.ShopManager;
+    public bool CanViewReports => _currentUserService.CurrentUser != null &&
+                                  _authorizationService.CanAccessReports(_currentUserService.CurrentUser);
 
     [RelayCommand]
     private async Task LoadBusinessesAsync()

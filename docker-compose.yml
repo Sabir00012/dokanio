@@ -3,12 +3,13 @@ version: '3.8'
 services:
   # Database
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: pos-postgres
     environment:
       POSTGRES_DB: pos_multi_business
       POSTGRES_USER: pos_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pos_secure_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -19,14 +20,16 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pos_user -d pos_multi_business"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Redis for caching and session management
   redis:
     image: redis:7-alpine
     container_name: pos-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secure_password}
     ports:
       - "6379:6379"
     volumes:
@@ -35,28 +38,34 @@ services:
       - pos-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_secure_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Backend API Server
   server:
     build:
       context: .
       dockerfile: Dockerfile.server
+      args:
+        - BUILDKIT_INLINE_CACHE=1
     container_name: pos-server
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Host=postgres;Database=pos_multi_business;Username=pos_user;Password=${POSTGRES_PASSWORD:-pos_secure_password}
-      - ConnectionStrings__Redis=redis:6379
-      - JWT__SecretKey=${JWT_SECRET_KEY}
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=pos_multi_business;Username=pos_user;Password=${POSTGRES_PASSWORD:-pos_secure_password};
+      - ConnectionStrings__Redis=redis:6379,password=${REDIS_PASSWORD:-redis_secure_password}
+      - JWT__Secret=${JWT_SECRET_KEY:-your-super-secret-jwt-key-change-in-production-min-32-chars}
       - JWT__Issuer=OfflineFirstPOS
       - JWT__Audience=OfflineFirstPOS
+      - JWT__ExpirationHours=24
       - Monitoring__ApplicationInsights__ConnectionString=${APPINSIGHTS_CONNECTION_STRING}
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft=Warning
     ports:
       - "5000:80"
-      - "5001:443"
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,25 +75,30 @@ services:
       - pos-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
   # Web Dashboard
   webdashboard:
     build:
       context: .
       dockerfile: Dockerfile.webdashboard
+      args:
+        - BUILDKIT_INLINE_CACHE=1
     container_name: pos-webdashboard
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:80
       - ApiSettings__BaseUrl=http://server
-      - ConnectionStrings__DefaultConnection=Host=postgres;Database=pos_multi_business;Username=pos_user;Password=${POSTGRES_PASSWORD:-pos_secure_password}
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=pos_multi_business;Username=pos_user;Password=${POSTGRES_PASSWORD:-pos_secure_password};
       - Monitoring__ApplicationInsights__ConnectionString=${APPINSIGHTS_CONNECTION_STRING}
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft=Warning
     ports:
       - "3000:80"
-      - "3001:443"
     depends_on:
       server:
         condition: service_healthy
@@ -92,19 +106,20 @@ services:
       - pos-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
   # Monitoring - Prometheus
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.48.0-alpine
     container_name: pos-prometheus
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -116,30 +131,43 @@ services:
     networks:
       - pos-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Monitoring - Grafana
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.2.0-alpine
     container_name: pos-grafana
     ports:
       - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - pos-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Log aggregation - Elasticsearch
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.0
     container_name: pos-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - logger.level=warn
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     ports:
@@ -147,20 +175,33 @@ services:
     networks:
       - pos-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Log aggregation - Kibana
   kibana:
-    image: docker.elastic.co/kibana/kibana:8.8.0
+    image: docker.elastic.co/kibana/kibana:8.10.0
     container_name: pos-kibana
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=
     ports:
       - "5601:5601"
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     networks:
       - pos-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   postgres_data:

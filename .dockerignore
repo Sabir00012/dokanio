@@ -1,0 +1,73 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vs
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+bin/
+obj/
+dist/
+build/
+
+# Test results
+TestResults/
+coverage/
+*.trx
+*.coverage
+
+# Logs
+*.log
+logs/
+
+# Dependencies
+node_modules/
+packages/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Documentation
+docs/
+README.md
+DOCKER_SETUP.md
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Environment files (don't include in image)
+.env
+.env.local
+.env.*.local
+
+# NuGet
+*.nupkg
+*.snupkg
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Misc
+.editorconfig
+.prettierignore
+.prettierrc

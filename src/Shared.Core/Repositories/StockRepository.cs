@@ -299,4 +299,101 @@ public class StockRepository : Repository<Stock>, IStockRepository
             throw;
         }
     }
+
+    // ── Enhanced query methods (Requirement 9.3) ──────────────────────────────
+
+    /// <summary>
+    /// Gets stock quantities for multiple products in a single batch query (Requirement 9.3).
+    /// More efficient than calling GetByProductIdAsync in a loop.
+    /// </summary>
+    public async Task<Dictionary<Guid, int>> GetStockQuantitiesBatchAsync(IEnumerable<Guid> productIds)
+    {
+        var ids = productIds?.ToList() ?? new List<Guid>();
+        if (ids.Count == 0)
+            return new Dictionary<Guid, int>();
+
+        try
+        {
+            _logger.LogDebug("Batch-fetching stock quantities for {Count} products from Local_Storage", ids.Count);
+
+            var stockEntries = await _dbSet
+                .AsNoTracking()
+                .Where(s => ids.Contains(s.ProductId) && !s.IsDeleted)
+                .Select(s => new { s.ProductId, s.Quantity })
+                .ToListAsync();
+
+            // Build result dictionary; products with no stock record default to 0
+            var result = ids.ToDictionary(id => id, _ => 0);
+            foreach (var entry in stockEntries)
+                result[entry.ProductId] = entry.Quantity;
+
+            _logger.LogDebug("Batch-fetched stock quantities for {Count} products from Local_Storage", ids.Count);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error batch-fetching stock quantities from Local_Storage");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Atomically decrements stock for multiple products in a single transaction (Requirement 9.3).
+    /// Throws <see cref="InvalidOperationException"/> if any product has insufficient stock.
+    /// Local-first: All changes are written to Local_Storage within a single transaction.
+    /// </summary>
+    public async Task DeductStockBatchAsync(Dictionary<Guid, int> reductions, Guid deviceId)
+    {
+        if (reductions == null || reductions.Count == 0)
+            return;
+
+        try
+        {
+            _logger.LogDebug("Deducting stock for {Count} products in batch from Local_Storage", reductions.Count);
+
+            // Load all affected stock records in one query
+            var productIds = reductions.Keys.ToList();
+            var stockEntries = await _dbSet
+                .Where(s => productIds.Contains(s.ProductId) && !s.IsDeleted)
+                .ToListAsync();
+
+            var stockByProduct = stockEntries.ToDictionary(s => s.ProductId);
+
+            // Validate all products have sufficient stock before making any changes
+            foreach (var (productId, quantity) in reductions)
+            {
+                if (!stockByProduct.TryGetValue(productId, out var stock))
+                    throw new InvalidOperationException(
+                        $"No stock record found for product {productId}. Cannot deduct {quantity} units.");
+
+                if (stock.Quantity < quantity)
+                    throw new InvalidOperationException(
+                        $"Insufficient stock for product {productId}: available={stock.Quantity}, requested={quantity}.");
+            }
+
+            // Apply all deductions
+            var now = DateTime.UtcNow;
+            foreach (var (productId, quantity) in reductions)
+            {
+                var stock = stockByProduct[productId];
+                var oldQty = stock.Quantity;
+                stock.Quantity -= quantity;
+                stock.LastUpdatedAt = now;
+                stock.UpdatedAt = now;
+                stock.DeviceId = deviceId;
+                stock.SyncStatus = SyncStatus.NotSynced;
+
+                _logger.LogDebug(
+                    "Deducted {Quantity} units from product {ProductId}: {OldQty} → {NewQty}",
+                    quantity, productId, oldQty, stock.Quantity);
+            }
+
+            _logger.LogInformation("Batch stock deduction applied for {Count} products", reductions.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deducting stock batch from Local_Storage");
+            throw;
+        }
+    }
 }

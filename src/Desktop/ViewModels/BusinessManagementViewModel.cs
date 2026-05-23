@@ -96,7 +96,8 @@ public partial class BusinessManagementViewModel : BaseViewModel
         Title = "Business Management";
     }
 
-    public bool CanManageBusinesses => _currentUserService.CurrentUser?.Role == UserRole.BusinessOwner;
+    public bool CanManageBusinesses => _currentUserService.CurrentUser?.Role is
+        UserRole.BusinessOwner or UserRole.Administrator or UserRole.SuperAdmin;
 
     public Array BusinessTypes => Enum.GetValues<BusinessType>();
 

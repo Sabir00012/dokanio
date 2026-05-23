@@ -16,6 +16,7 @@ public partial class LoginViewModel : BaseViewModel
     private readonly ISessionService _sessionService;
     private readonly ICurrentUserService _currentUserService;
     private readonly IAuditService _auditService;
+    private readonly IAuthorizationService _authorizationService;
 
     public event EventHandler<User>? LoginSuccessful;
 
@@ -40,12 +41,14 @@ public partial class LoginViewModel : BaseViewModel
         IUserService userService,
         ISessionService sessionService,
         ICurrentUserService currentUserService,
-        IAuditService auditService)
+        IAuditService auditService,
+        IAuthorizationService authorizationService)
     {
         _userService = userService;
         _sessionService = sessionService;
         _currentUserService = currentUserService;
         _auditService = auditService;
+        _authorizationService = authorizationService;
     }
 
     [RelayCommand]
@@ -87,9 +90,20 @@ public partial class LoginViewModel : BaseViewModel
 
             // Create session
             var session = await _sessionService.CreateSessionAsync(user.Id);
+
+            // Build permissions for this user
+            var permissions = new UserPermissions
+            {
+                UserId = user.Id,
+                Role = user.Role,
+                BusinessId = user.BusinessId,
+                ShopId = user.ShopId
+            };
+            foreach (var action in _authorizationService.GetRolePermissions(user.Role))
+                permissions.Permissions.Add(action.ToString());
             
-            // Set current user context
-            _currentUserService.SetCurrentUser(user, session);
+            // Set current user context with permissions
+            _currentUserService.SetCurrentUser(user, session, permissions);
 
             // Log successful login
             await _auditService.LogAsync(

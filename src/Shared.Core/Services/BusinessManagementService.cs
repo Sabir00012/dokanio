@@ -92,7 +92,7 @@ public class BusinessManagementService : IBusinessManagementService
         }
 
         // Check if business name is unique for this owner (excluding current business)
-        var isUnique = await _businessRepository.IsBusinessNameUniqueAsync(request.Name, business.OwnerId, request.Id);
+        var isUnique = await _businessRepository.IsBusinessNameUniqueAsync(request.Name, business.OwnerId ?? Guid.Empty, request.Id);
         if (!isUnique)
         {
             throw new InvalidOperationException($"Business name '{request.Name}' already exists for this owner");
@@ -646,7 +646,7 @@ public class BusinessManagementService : IBusinessManagementService
 
     private async Task<BusinessResponse> MapToBusinessResponseAsync(Business business)
     {
-        var owner = business.Owner ?? await _userRepository.GetByIdAsync(business.OwnerId);
+        var owner = business.Owner ?? (business.OwnerId.HasValue ? await _userRepository.GetByIdAsync(business.OwnerId.Value) : null);
         
         return new BusinessResponse
         {

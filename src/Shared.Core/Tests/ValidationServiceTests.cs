@@ -7,7 +7,6 @@ using Shared.Core.Enums;
 using Shared.Core.Services;
 using Xunit;
 using Xunit.Abstractions;
-
 namespace Shared.Core.Tests;
 
 /// <summary>
@@ -523,6 +522,417 @@ public class ValidationServiceTests : IDisposable
         Assert.Contains("TestField", message);
         Assert.Contains("required", message.ToLowerInvariant());
         _output.WriteLine($"Localized message: {message}");
+    }
+
+    // ─── Sale Operation Validation Tests (Requirements 8.2, 10.1) ───────────────
+
+    [Fact]
+    public async Task ValidateSaleCreationAsync_WithValidInputs_ShouldReturnValid()
+    {
+        // Arrange
+        var invoiceNumber = "INV-2024-001";
+        var deviceId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateSaleCreationAsync(invoiceNumber, deviceId, userId);
+
+        // Assert
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
+        _output.WriteLine("Sale creation validation passed for valid inputs");
+    }
+
+    [Fact]
+    public async Task ValidateSaleCreationAsync_WithEmptyInvoiceNumber_ShouldReturnRequiredError()
+    {
+        // Arrange
+        var deviceId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateSaleCreationAsync("", deviceId, userId);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Single(result.Errors);
+        Assert.Equal(SaleValidationErrorType.Required, result.Errors.First().Type);
+        Assert.Equal("invoiceNumber", result.Errors.First().Field);
+        _output.WriteLine($"Sale creation validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateSaleCreationAsync_WithEmptyDeviceId_ShouldReturnRequiredError()
+    {
+        // Arrange
+        var invoiceNumber = "INV-2024-001";
+        var userId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateSaleCreationAsync(invoiceNumber, Guid.Empty, userId);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "deviceId" && e.Type == SaleValidationErrorType.Required);
+        _output.WriteLine($"Device ID validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateSaleCreationAsync_WithEmptyUserId_ShouldReturnRequiredError()
+    {
+        // Arrange
+        var invoiceNumber = "INV-2024-001";
+        var deviceId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateSaleCreationAsync(invoiceNumber, deviceId, Guid.Empty);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "userId" && e.Type == SaleValidationErrorType.Required);
+        _output.WriteLine($"User ID validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateSaleCreationAsync_WithTooLongInvoiceNumber_ShouldReturnOutOfRangeError()
+    {
+        // Arrange
+        var invoiceNumber = new string('X', 51); // 51 chars, exceeds 50 limit
+        var deviceId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateSaleCreationAsync(invoiceNumber, deviceId, userId);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Type == SaleValidationErrorType.OutOfRange);
+        _output.WriteLine($"Invoice number length validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateProductAdditionAsync_WithValidInputs_ShouldReturnValid()
+    {
+        // Arrange
+        var saleId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var quantity = 5;
+
+        // Act
+        var result = await _validationService.ValidateProductAdditionAsync(saleId, productId, quantity);
+
+        // Assert
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
+        _output.WriteLine("Product addition validation passed for valid inputs");
+    }
+
+    [Fact]
+    public async Task ValidateProductAdditionAsync_WithZeroQuantity_ShouldReturnOutOfRangeError()
+    {
+        // Arrange
+        var saleId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateProductAdditionAsync(saleId, productId, 0);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "quantity" && e.Type == SaleValidationErrorType.OutOfRange);
+        _output.WriteLine($"Zero quantity validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateProductAdditionAsync_WithNegativeQuantity_ShouldReturnOutOfRangeError()
+    {
+        // Arrange
+        var saleId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateProductAdditionAsync(saleId, productId, -1);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Type == SaleValidationErrorType.OutOfRange);
+        _output.WriteLine($"Negative quantity validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateProductAdditionAsync_WithEmptySaleId_ShouldReturnRequiredError()
+    {
+        // Arrange
+        var productId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateProductAdditionAsync(Guid.Empty, productId, 1);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "saleId" && e.Type == SaleValidationErrorType.Required);
+        _output.WriteLine($"Empty sale ID validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateWeightBasedProductAdditionAsync_WithValidInputs_ShouldReturnValid()
+    {
+        // Arrange
+        var saleId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var weight = 1.5m;
+
+        // Act
+        var result = await _validationService.ValidateWeightBasedProductAdditionAsync(saleId, productId, weight);
+
+        // Assert
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
+        _output.WriteLine("Weight-based product addition validation passed");
+    }
+
+    [Fact]
+    public async Task ValidateWeightBasedProductAdditionAsync_WithZeroWeight_ShouldReturnOutOfRangeError()
+    {
+        // Arrange
+        var saleId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateWeightBasedProductAdditionAsync(saleId, productId, 0m);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "weight" && e.Type == SaleValidationErrorType.OutOfRange);
+        _output.WriteLine($"Zero weight validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateWeightBasedProductAdditionAsync_WithNegativeWeight_ShouldReturnOutOfRangeError()
+    {
+        // Arrange
+        var saleId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateWeightBasedProductAdditionAsync(saleId, productId, -0.5m);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Type == SaleValidationErrorType.OutOfRange);
+        _output.WriteLine($"Negative weight validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateItemQuantityUpdateAsync_WithValidInputs_ShouldReturnValid()
+    {
+        // Arrange
+        var saleItemId = Guid.NewGuid();
+        var newQuantity = 3;
+
+        // Act
+        var result = await _validationService.ValidateItemQuantityUpdateAsync(saleItemId, newQuantity);
+
+        // Assert
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
+        _output.WriteLine("Item quantity update validation passed");
+    }
+
+    [Fact]
+    public async Task ValidateItemQuantityUpdateAsync_WithZeroQuantity_ShouldReturnOutOfRangeError()
+    {
+        // Arrange
+        var saleItemId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateItemQuantityUpdateAsync(saleItemId, 0);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "newQuantity" && e.Type == SaleValidationErrorType.OutOfRange);
+        _output.WriteLine($"Zero quantity update validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateItemQuantityUpdateAsync_WithEmptySaleItemId_ShouldReturnRequiredError()
+    {
+        // Act
+        var result = await _validationService.ValidateItemQuantityUpdateAsync(Guid.Empty, 5);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "saleItemId" && e.Type == SaleValidationErrorType.Required);
+        _output.WriteLine($"Empty sale item ID validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateSaleCompletionAsync_WithValidInputs_ShouldReturnValid()
+    {
+        // Arrange
+        var saleId = Guid.NewGuid();
+        var paymentMethod = PaymentMethod.Cash;
+        var amountPaid = 100.00m;
+
+        // Act
+        var result = await _validationService.ValidateSaleCompletionAsync(saleId, paymentMethod, amountPaid);
+
+        // Assert
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
+        _output.WriteLine("Sale completion validation passed for valid inputs");
+    }
+
+    [Fact]
+    public async Task ValidateSaleCompletionAsync_WithNegativeAmount_ShouldReturnOutOfRangeError()
+    {
+        // Arrange
+        var saleId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateSaleCompletionAsync(saleId, PaymentMethod.Cash, -10m);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "amountPaid" && e.Type == SaleValidationErrorType.OutOfRange);
+        _output.WriteLine($"Negative amount validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateSaleCompletionAsync_WithZeroAmountForCash_ShouldReturnBusinessRuleError()
+    {
+        // Arrange
+        var saleId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateSaleCompletionAsync(saleId, PaymentMethod.Cash, 0m);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Type == SaleValidationErrorType.BusinessRule);
+        _output.WriteLine($"Zero cash amount business rule error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateSaleCompletionAsync_WithEmptySaleId_ShouldReturnRequiredError()
+    {
+        // Act
+        var result = await _validationService.ValidateSaleCompletionAsync(Guid.Empty, PaymentMethod.Cash, 50m);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "saleId" && e.Type == SaleValidationErrorType.Required);
+        _output.WriteLine($"Empty sale ID completion validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateCustomerForSaleAsync_WithEmptyCustomerId_ShouldReturnRequiredError()
+    {
+        // Act
+        var result = await _validationService.ValidateCustomerForSaleAsync(Guid.Empty);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Field == "customerId" && e.Type == SaleValidationErrorType.Required);
+        _output.WriteLine($"Empty customer ID validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public async Task ValidateCustomerForSaleAsync_WithNonExistentCustomer_ShouldReturnCustomerInvalidError()
+    {
+        // Arrange - use a random Guid that won't exist in the in-memory DB
+        var nonExistentCustomerId = Guid.NewGuid();
+
+        // Act
+        var result = await _validationService.ValidateCustomerForSaleAsync(nonExistentCustomerId);
+
+        // Assert
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Type == SaleValidationErrorType.CustomerInvalid);
+        _output.WriteLine($"Non-existent customer validation error: {result.Errors.First().Message}");
+    }
+
+    [Fact]
+    public void AggregateValidationResults_WithMultipleResults_ShouldCombineErrors()
+    {
+        // Arrange
+        var result1 = new SaleValidationResult
+        {
+            IsValid = false,
+            Errors = new List<SaleValidationError>
+            {
+                new() { Field = "invoiceNumber", Message = "Invoice number is required.", Type = SaleValidationErrorType.Required }
+            }
+        };
+        var result2 = new SaleValidationResult
+        {
+            IsValid = false,
+            Errors = new List<SaleValidationError>
+            {
+                new() { Field = "quantity", Message = "Quantity must be greater than zero.", Type = SaleValidationErrorType.OutOfRange }
+            }
+        };
+
+        // Act
+        var aggregated = _validationService.AggregateValidationResults(new[] { result1, result2 });
+
+        // Assert
+        Assert.False(aggregated.IsValid);
+        Assert.Equal(2, aggregated.Errors.Count());
+        Assert.Contains(aggregated.Errors, e => e.Field == "invoiceNumber");
+        Assert.Contains(aggregated.Errors, e => e.Field == "quantity");
+        _output.WriteLine($"Aggregated {aggregated.Errors.Count()} errors from 2 results");
+    }
+
+    [Fact]
+    public void AggregateValidationResults_WithAllValidResults_ShouldReturnValid()
+    {
+        // Arrange
+        var result1 = new SaleValidationResult { IsValid = true };
+        var result2 = new SaleValidationResult { IsValid = true };
+
+        // Act
+        var aggregated = _validationService.AggregateValidationResults(new[] { result1, result2 });
+
+        // Assert
+        Assert.True(aggregated.IsValid);
+        Assert.Empty(aggregated.Errors);
+        _output.WriteLine("Aggregation of valid results returns valid");
+    }
+
+    [Fact]
+    public void AggregateValidationResults_WithItemErrors_ShouldMergeItemErrors()
+    {
+        // Arrange
+        var itemId1 = Guid.NewGuid();
+        var itemId2 = Guid.NewGuid();
+
+        var result1 = new SaleValidationResult
+        {
+            IsValid = false,
+            ItemErrors = new Dictionary<Guid, IEnumerable<string>>
+            {
+                { itemId1, new[] { "Item 1 error A" } }
+            }
+        };
+        var result2 = new SaleValidationResult
+        {
+            IsValid = false,
+            ItemErrors = new Dictionary<Guid, IEnumerable<string>>
+            {
+                { itemId1, new[] { "Item 1 error B" } },
+                { itemId2, new[] { "Item 2 error" } }
+            }
+        };
+
+        // Act
+        var aggregated = _validationService.AggregateValidationResults(new[] { result1, result2 });
+
+        // Assert
+        Assert.True(aggregated.ItemErrors.ContainsKey(itemId1));
+        Assert.True(aggregated.ItemErrors.ContainsKey(itemId2));
+        Assert.Equal(2, aggregated.ItemErrors[itemId1].Count());
+        _output.WriteLine($"Aggregated item errors: {aggregated.ItemErrors.Count} items with errors");
     }
 
     public void Dispose()

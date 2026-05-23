@@ -47,6 +47,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IValidationService, ValidationService>();
         services.AddScoped<IConfigurationService, ConfigurationService>();
         services.AddScoped<IConfigurationManagementService, ConfigurationManagementService>();
+        services.AddScoped<IFeatureFlagService, FeatureFlagService>();
+        services.AddScoped<IConfigurationInitializationService, ConfigurationInitializationService>();
         services.AddScoped<ILicenseService, LicenseService>();
         services.AddScoped<IIntegratedPosService, IntegratedPosService>();
         services.AddScoped<IApplicationStartupService, ApplicationStartupService>();
@@ -54,6 +56,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStockValidationService, StockValidationService>();
         services.AddScoped<IPaymentProcessingService, PaymentProcessingService>();
         services.AddScoped<IInventoryUpdater, InventoryUpdater>();
+        services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IDiscountManagementService, DiscountManagementService>();
         
         // Register device context service
         services.AddSingleton<IDeviceContextService, DeviceContextService>();
@@ -82,6 +87,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILicenseRepository, LicenseRepository>();
         services.AddScoped<IBusinessRepository, BusinessRepository>();
         services.AddScoped<IShopRepository, ShopRepository>();
+        services.AddScoped<ISupplierRepository, SupplierRepository>();
         
         // Register transaction logging service for offline-first persistence
         services.AddScoped<ITransactionLogService, TransactionLogService>();
@@ -100,7 +106,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEnhancedAuditService, EnhancedAuditService>();
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<IAuthorizationService, AuthorizationService>();
-        services.AddSingleton<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
         
         // Register comprehensive logging service
         services.AddScoped<IComprehensiveLoggingService, ComprehensiveLoggingService>();
@@ -120,6 +126,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOfflineQueueService, OfflineQueueService>();
         services.AddScoped<ICrashRecoveryService, CrashRecoveryService>();
         services.AddScoped<IEnhancedErrorRecoveryService, EnhancedErrorRecoveryService>();
+        
+        // Register sale error handling service (Requirements 8.1, 8.3, 8.4, 8.5)
+        services.AddScoped<ISaleErrorHandlingService, SaleErrorHandlingService>();
         
         // Register database migration service
         services.AddScoped<IDatabaseMigrationService, DatabaseMigrationService>();
@@ -147,6 +156,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPerformanceMonitoringService, PerformanceMonitoringService>();
         services.AddScoped<ISystemMonitoringService, SystemMonitoringService>();
         services.AddScoped<IEnhancedPerformanceMonitoringService, EnhancedPerformanceMonitoringService>();
+        
+        // Register sales caching and concurrency services (Requirements 9.1, 9.4, 9.5)
+        services.AddMemoryCache();
+        services.AddScoped<ISalesCacheService, SalesCacheService>();
+        services.AddSingleton<ConcurrentSaleOperationGuard>();
+        
+        // Register audit logging service (Requirements 10.1, 10.2, 10.3, 10.6)
+        services.AddScoped<ISaleAuditLogRepository, SaleAuditLogRepository>();
+        services.AddScoped<IAuditLoggingService, AuditLoggingService>();
         
         // Register background services
         services.AddHostedService<SessionCleanupService>();
@@ -222,6 +240,8 @@ public static class ServiceCollectionExtensions
         {
             options.UseInMemoryDatabase("TestDatabase");
             options.EnableSensitiveDataLogging(true);
+            // Suppress transaction warning: in-memory DB ignores transactions (expected in tests)
+            options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning));
         });
 
         // Register business logic services
@@ -258,11 +278,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILicenseRepository, LicenseRepository>();
         services.AddScoped<IBusinessRepository, BusinessRepository>();
         services.AddScoped<IShopRepository, ShopRepository>();
+        services.AddScoped<ISupplierRepository, SupplierRepository>();
 
         // Register additional services for testing
         services.AddScoped<IDiscountManagementService, DiscountManagementService>();
         services.AddScoped<IConfigurationService, ConfigurationService>();
         services.AddScoped<IConfigurationManagementService, ConfigurationManagementService>();
+        services.AddScoped<IFeatureFlagService, FeatureFlagService>();
+        services.AddScoped<IConfigurationInitializationService, ConfigurationInitializationService>();
         services.AddScoped<ILicenseService, LicenseService>();
         services.AddScoped<IIntegratedPosService, IntegratedPosService>();
         services.AddScoped<IApplicationStartupService, ApplicationStartupService>();
@@ -271,6 +294,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStockValidationService, StockValidationService>();
         services.AddScoped<IPaymentProcessingService, PaymentProcessingService>();
         services.AddScoped<IInventoryUpdater, InventoryUpdater>();
+        services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<IReportService, ReportService>();
         
         // Register system integration service for testing
         services.AddScoped<ISystemIntegrationService, SystemIntegrationService>();
@@ -321,6 +346,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISystemMonitoringService, SystemMonitoringService>();
         services.AddScoped<IEnhancedPerformanceMonitoringService, EnhancedPerformanceMonitoringService>();
         
+        // Register sales caching and concurrency services (Requirements 9.1, 9.4, 9.5)
+        services.AddMemoryCache();
+        services.AddScoped<ISalesCacheService, SalesCacheService>();
+        services.AddSingleton<ConcurrentSaleOperationGuard>();
+        
+        // Register audit logging service (Requirements 10.1, 10.2, 10.3, 10.6)
+        services.AddScoped<ISaleAuditLogRepository, SaleAuditLogRepository>();
+        services.AddScoped<IAuditLoggingService, AuditLoggingService>();
+        
         services.AddScoped<IAuthenticationService>(provider => new AuthenticationService(
             provider.GetRequiredService<IUserRepository>(),
             provider.GetRequiredService<IShopRepository>(),
@@ -352,6 +386,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOfflineQueueService, OfflineQueueService>();
         services.AddScoped<ICrashRecoveryService, CrashRecoveryService>();
         services.AddScoped<IEnhancedErrorRecoveryService, EnhancedErrorRecoveryService>();
+        
+        // Register sale error handling service (Requirements 8.1, 8.3, 8.4, 8.5)
+        services.AddScoped<ISaleErrorHandlingService, SaleErrorHandlingService>();
         
         // Add test configurations
         services.AddSingleton(provider => new SyncConfiguration

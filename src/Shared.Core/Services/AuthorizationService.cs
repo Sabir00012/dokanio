@@ -40,8 +40,8 @@ public class AuthorizationService : IAuthorizationService
 
     public bool CanManageInventory(User user)
     {
-        return HasPermission(user, AuditAction.UpdateInventory) || 
-               HasPermission(user, AuditAction.CreateProduct) || 
+        return HasPermission(user, AuditAction.UpdateInventory) ||
+               HasPermission(user, AuditAction.CreateProduct) ||
                HasPermission(user, AuditAction.UpdateProduct);
     }
 
@@ -63,18 +63,33 @@ public class AuthorizationService : IAuthorizationService
             {
                 AuditAction.Login,
                 AuditAction.Logout,
-                AuditAction.CreateSale
+                AuditAction.CreateSale,
+                AuditAction.Read
             },
-            
+
             [UserRole.InventoryStaff] = new HashSet<AuditAction>
             {
                 AuditAction.Login,
                 AuditAction.Logout,
                 AuditAction.CreateProduct,
                 AuditAction.UpdateProduct,
-                AuditAction.UpdateInventory
+                AuditAction.UpdateInventory,
+                AuditAction.Read
             },
-            
+
+            [UserRole.InventoryManager] = new HashSet<AuditAction>
+            {
+                AuditAction.Login,
+                AuditAction.Logout,
+                AuditAction.CreateProduct,
+                AuditAction.UpdateProduct,
+                AuditAction.DeleteProduct,
+                AuditAction.UpdateInventory,
+                AuditAction.AccessReports,
+                AuditAction.DataExport,
+                AuditAction.Read
+            },
+
             [UserRole.ShopManager] = new HashSet<AuditAction>
             {
                 AuditAction.Login,
@@ -87,9 +102,11 @@ public class AuthorizationService : IAuthorizationService
                 AuditAction.UpdateInventory,
                 AuditAction.AccessReports,
                 AuditAction.DataExport,
-                AuditAction.DataImport
+                AuditAction.DataImport,
+                AuditAction.ChangeUserRole,
+                AuditAction.Read
             },
-            
+
             [UserRole.BusinessOwner] = new HashSet<AuditAction>
             {
                 AuditAction.Login,
@@ -104,10 +121,28 @@ public class AuthorizationService : IAuthorizationService
                 AuditAction.ChangeUserRole,
                 AuditAction.SystemConfiguration,
                 AuditAction.DataExport,
-                AuditAction.DataImport
+                AuditAction.DataImport,
+                AuditAction.Read,
+                AuditAction.Update
             },
-            
-            // Legacy roles for backward compatibility
+
+            [UserRole.Accountant] = new HashSet<AuditAction>
+            {
+                AuditAction.Login,
+                AuditAction.Logout,
+                AuditAction.AccessReports,
+                AuditAction.DataExport,
+                AuditAction.Read
+            },
+
+            [UserRole.Viewer] = new HashSet<AuditAction>
+            {
+                AuditAction.Login,
+                AuditAction.Logout,
+                AuditAction.Read
+            },
+
+            // Legacy / elevated roles
             [UserRole.Supervisor] = new HashSet<AuditAction>
             {
                 AuditAction.Login,
@@ -115,9 +150,10 @@ public class AuthorizationService : IAuthorizationService
                 AuditAction.CreateSale,
                 AuditAction.RefundSale,
                 AuditAction.AccessReports,
-                AuditAction.UpdateInventory
+                AuditAction.UpdateInventory,
+                AuditAction.Read
             },
-            
+
             [UserRole.Manager] = new HashSet<AuditAction>
             {
                 AuditAction.Login,
@@ -130,9 +166,10 @@ public class AuthorizationService : IAuthorizationService
                 AuditAction.UpdateInventory,
                 AuditAction.AccessReports,
                 AuditAction.DataExport,
-                AuditAction.DataImport
+                AuditAction.DataImport,
+                AuditAction.Read
             },
-            
+
             [UserRole.Administrator] = new HashSet<AuditAction>
             {
                 AuditAction.Login,
@@ -148,7 +185,31 @@ public class AuthorizationService : IAuthorizationService
                 AuditAction.SystemConfiguration,
                 AuditAction.DataExport,
                 AuditAction.DataImport,
-                AuditAction.SecurityViolation
+                AuditAction.SecurityViolation,
+                AuditAction.Read,
+                AuditAction.Update
+            },
+
+            [UserRole.SuperAdmin] = new HashSet<AuditAction>
+            {
+                // SuperAdmin has all permissions
+                AuditAction.Login,
+                AuditAction.Logout,
+                AuditAction.CreateSale,
+                AuditAction.RefundSale,
+                AuditAction.CreateProduct,
+                AuditAction.UpdateProduct,
+                AuditAction.DeleteProduct,
+                AuditAction.UpdateInventory,
+                AuditAction.AccessReports,
+                AuditAction.ChangeUserRole,
+                AuditAction.SystemConfiguration,
+                AuditAction.DataExport,
+                AuditAction.DataImport,
+                AuditAction.SecurityViolation,
+                AuditAction.SystemMaintenance,
+                AuditAction.Read,
+                AuditAction.Update
             }
         };
     }

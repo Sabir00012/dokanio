@@ -28,7 +28,7 @@
     </Border>
 
     <!-- Main Content -->
-    <TabControl Grid.Row="1" Margin="16" SelectedIndex="{Binding SelectedTabIndex}">
+    <TabControl Grid.Row="1" Margin="16" SelectedItem="{Binding SelectedTab}">
       
       <!-- Shop Settings Tab -->
       <TabItem Header="Shop Settings">
@@ -315,7 +315,7 @@
     <!-- Loading Overlay -->
     <Border Grid.RowSpan="3" 
             Background="#80000000" 
-            IsVisible="{Binding IsLoading}"
+            IsVisible="{Binding IsBusy}"
             ZIndex="1000">
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
         <ProgressBar IsIndeterminate="True" Width="50" Height="50" />

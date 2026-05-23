@@ -57,6 +57,7 @@
         <converters:ChangeAmountColorConverter x:Key="ChangeAmountColorConverter"/>
         <converters:MessageTypeToClassConverter x:Key="MessageTypeToClassConverter"/>
         <converters:BoolToStringConverter x:Key="BoolToStringConverter"/>
+        <converters:BoolToColorConverter x:Key="BoolToColorConverter"/>
         <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
         <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
     </Application.Resources>

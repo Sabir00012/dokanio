@@ -194,4 +194,60 @@ public interface IConfigurationService
     /// <param name="description">Optional description</param>
     /// <returns>Task</returns>
     Task SetUserConfigurationAsync<T>(Guid userId, string key, T value, string? description = null);
+    
+    /// <summary>
+    /// Gets feature flag settings for gradual rollout
+    /// </summary>
+    /// <returns>Feature flag settings</returns>
+    Task<FeatureFlagSettings> GetFeatureFlagSettingsAsync();
+    
+    /// <summary>
+    /// Sets feature flag settings for gradual rollout
+    /// </summary>
+    /// <param name="settings">Feature flag settings</param>
+    /// <returns>Task</returns>
+    Task SetFeatureFlagSettingsAsync(FeatureFlagSettings settings);
+    
+    /// <summary>
+    /// Gets sales performance settings
+    /// </summary>
+    /// <returns>Sales performance settings</returns>
+    Task<SalesPerformanceSettings> GetSalesPerformanceSettingsAsync();
+    
+    /// <summary>
+    /// Sets sales performance settings
+    /// </summary>
+    /// <param name="settings">Sales performance settings</param>
+    /// <returns>Task</returns>
+    Task SetSalesPerformanceSettingsAsync(SalesPerformanceSettings settings);
+    
+    /// <summary>
+    /// Gets user calculation preferences
+    /// </summary>
+    /// <param name="userId">User identifier</param>
+    /// <returns>User calculation preferences</returns>
+    Task<UserCalculationPreferences> GetUserCalculationPreferencesAsync(Guid userId);
+    
+    /// <summary>
+    /// Sets user calculation preferences
+    /// </summary>
+    /// <param name="userId">User identifier</param>
+    /// <param name="preferences">User calculation preferences</param>
+    /// <returns>Task</returns>
+    Task SetUserCalculationPreferencesAsync(Guid userId, UserCalculationPreferences preferences);
+    
+    /// <summary>
+    /// Gets sales calculation precision settings for a shop
+    /// </summary>
+    /// <param name="shopId">Shop identifier</param>
+    /// <returns>Calculation precision settings</returns>
+    Task<SalesCalculationPrecisionSettings> GetSalesCalculationPrecisionSettingsAsync(Guid shopId);
+    
+    /// <summary>
+    /// Sets sales calculation precision settings for a shop
+    /// </summary>
+    /// <param name="shopId">Shop identifier</param>
+    /// <param name="settings">Calculation precision settings</param>
+    /// <returns>Task</returns>
+    Task SetSalesCalculationPrecisionSettingsAsync(Guid shopId, SalesCalculationPrecisionSettings settings);
 }

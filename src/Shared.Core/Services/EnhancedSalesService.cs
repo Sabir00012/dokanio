@@ -16,7 +16,7 @@ public class EnhancedSalesService : SaleService, IEnhancedSalesService
 {
     private readonly IBusinessManagementService _businessManagementService;
     private readonly ICurrentUserService _currentUserService;
-    private readonly ILogger<EnhancedSalesService> _logger;
+    private readonly new ILogger<EnhancedSalesService> _logger;
 
     public EnhancedSalesService(
         ISaleRepository saleRepository,
@@ -34,10 +34,15 @@ public class EnhancedSalesService : SaleService, IEnhancedSalesService
         IShopRepository shopRepository,
         ICurrentUserService currentUserService,
         PosDbContext context,
-        ILogger<EnhancedSalesService> logger)
+        ILogger<EnhancedSalesService> logger,
+        IValidationService validationService,
+        ISalesCacheService salesCache,
+        ConcurrentSaleOperationGuard operationGuard,
+        IAuditLoggingService auditLogging)
         : base(saleRepository, saleItemRepository, productService, inventoryService, 
                weightBasedPricingService, membershipService, discountService, 
-               configurationService, licenseService, userRepository, authorizationService, shopRepository, context, logger)
+               configurationService, licenseService, userRepository, authorizationService, shopRepository, context, logger,
+               validationService, salesCache, operationGuard, auditLogging)
     {
         _businessManagementService = businessManagementService;
         _currentUserService = currentUserService;

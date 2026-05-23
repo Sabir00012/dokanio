@@ -89,6 +89,25 @@ public class CountToVisibilityConverter : IValueConverter
     }
 }
 
+public class BoolToColorConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is bool boolValue)
+        {
+            return boolValue
+                ? new SolidColorBrush(Color.Parse("#4CAF50")) // Green for active/true
+                : new SolidColorBrush(Color.Parse("#F44336")); // Red for inactive/false
+        }
+        return new SolidColorBrush(Color.Parse("#757575")); // Gray for null/invalid
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
 public class InverseBoolConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)

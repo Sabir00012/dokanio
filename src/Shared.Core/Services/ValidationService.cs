@@ -861,6 +861,492 @@ public class ValidationService : IValidationService
 
     #endregion
 
+    #region Sale Operation Validation (Requirements 8.2, 10.1)
+
+    /// <inheritdoc />
+    public async Task<SaleValidationResult> ValidateSaleCreationAsync(
+        string invoiceNumber,
+        Guid deviceId,
+        Guid userId,
+        Guid? customerId = null)
+    {
+        var errors = new List<SaleValidationError>();
+        var warnings = new List<SaleValidationWarning>();
+
+        // Invoice number: required, non-empty, max 50 chars
+        if (string.IsNullOrWhiteSpace(invoiceNumber))
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(invoiceNumber),
+                Message = "Invoice number is required.",
+                Type = SaleValidationErrorType.Required
+            });
+        }
+        else if (invoiceNumber.Length > 50)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(invoiceNumber),
+                Message = "Invoice number must not exceed 50 characters.",
+                Type = SaleValidationErrorType.OutOfRange
+            });
+        }
+
+        // Device ID: must not be empty
+        if (deviceId == Guid.Empty)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(deviceId),
+                Message = "Device ID is required and must be a valid identifier.",
+                Type = SaleValidationErrorType.Required
+            });
+        }
+
+        // User ID: must not be empty
+        if (userId == Guid.Empty)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(userId),
+                Message = "User ID is required and must be a valid identifier.",
+                Type = SaleValidationErrorType.Required
+            });
+        }
+
+        // Optional customer ID: if provided, must not be empty Guid
+        if (customerId.HasValue && customerId.Value == Guid.Empty)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(customerId),
+                Message = "Customer ID, when provided, must be a valid identifier.",
+                Type = SaleValidationErrorType.InvalidFormat
+            });
+        }
+
+        var result = new SaleValidationResult
+        {
+            IsValid = errors.Count == 0,
+            Errors = errors,
+            Warnings = warnings
+        };
+
+        if (!result.IsValid)
+        {
+            _logger.LogWarning(
+                "Sale creation validation failed for invoice {InvoiceNumber}: {ErrorCount} error(s). Fields: {Fields}",
+                invoiceNumber,
+                errors.Count,
+                string.Join(", ", errors.Select(e => e.Field)));
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Sale creation validation passed for invoice {InvoiceNumber} at {Timestamp}",
+                invoiceNumber,
+                DateTime.UtcNow);
+        }
+
+        return await Task.FromResult(result);
+    }
+
+    /// <inheritdoc />
+    public async Task<SaleValidationResult> ValidateProductAdditionAsync(
+        Guid saleId,
+        Guid productId,
+        int quantity,
+        string? batchNumber = null)
+    {
+        var errors = new List<SaleValidationError>();
+        var warnings = new List<SaleValidationWarning>();
+
+        // Sale ID: must not be empty
+        if (saleId == Guid.Empty)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(saleId),
+                Message = "Sale ID is required.",
+                Type = SaleValidationErrorType.Required
+            });
+        }
+
+        // Product ID: must not be empty
+        if (productId == Guid.Empty)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(productId),
+                Message = "Product ID is required.",
+                Type = SaleValidationErrorType.Required
+            });
+        }
+
+        // Quantity: must be > 0
+        if (quantity <= 0)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(quantity),
+                Message = "Quantity must be greater than zero.",
+                Type = SaleValidationErrorType.OutOfRange
+            });
+        }
+        else if (quantity > 10000)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(quantity),
+                Message = "Quantity must not exceed 10,000 units per line item.",
+                Type = SaleValidationErrorType.OutOfRange
+            });
+        }
+
+        // Batch number: if provided, must not be empty string
+        if (batchNumber != null && string.IsNullOrWhiteSpace(batchNumber))
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(batchNumber),
+                Message = "Batch number, when provided, must not be empty.",
+                Type = SaleValidationErrorType.InvalidFormat
+            });
+        }
+
+        var result = new SaleValidationResult
+        {
+            IsValid = errors.Count == 0,
+            Errors = errors,
+            Warnings = warnings
+        };
+
+        if (!result.IsValid)
+        {
+            _logger.LogWarning(
+                "Product addition validation failed for sale {SaleId}, product {ProductId}: {ErrorCount} error(s).",
+                saleId, productId, errors.Count);
+        }
+
+        return await Task.FromResult(result);
+    }
+
+    /// <inheritdoc />
+    public async Task<SaleValidationResult> ValidateWeightBasedProductAdditionAsync(
+        Guid saleId,
+        Guid productId,
+        decimal weight)
+    {
+        var errors = new List<SaleValidationError>();
+        var warnings = new List<SaleValidationWarning>();
+
+        // Sale ID: must not be empty
+        if (saleId == Guid.Empty)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(saleId),
+                Message = "Sale ID is required.",
+                Type = SaleValidationErrorType.Required
+            });
+        }
+
+        // Product ID: must not be empty
+        if (productId == Guid.Empty)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(productId),
+                Message = "Product ID is required.",
+                Type = SaleValidationErrorType.Required
+            });
+        }
+
+        // Weight: must be > 0
+        if (weight <= 0)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(weight),
+                Message = "Weight must be greater than zero.",
+                Type = SaleValidationErrorType.OutOfRange
+            });
+        }
+        else if (weight > 1000)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(weight),
+                Message = "Weight must not exceed 1,000 kg per line item.",
+                Type = SaleValidationErrorType.OutOfRange
+            });
+        }
+
+        var result = new SaleValidationResult
+        {
+            IsValid = errors.Count == 0,
+            Errors = errors,
+            Warnings = warnings
+        };
+
+        if (!result.IsValid)
+        {
+            _logger.LogWarning(
+                "Weight-based product addition validation failed for sale {SaleId}, product {ProductId}: {ErrorCount} error(s).",
+                saleId, productId, errors.Count);
+        }
+
+        return await Task.FromResult(result);
+    }
+
+    /// <inheritdoc />
+    public async Task<SaleValidationResult> ValidateItemQuantityUpdateAsync(
+        Guid saleItemId,
+        int newQuantity)
+    {
+        var errors = new List<SaleValidationError>();
+        var warnings = new List<SaleValidationWarning>();
+
+        // Sale item ID: must not be empty
+        if (saleItemId == Guid.Empty)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(saleItemId),
+                Message = "Sale item ID is required.",
+                Type = SaleValidationErrorType.Required
+            });
+        }
+
+        // New quantity: must be > 0
+        if (newQuantity <= 0)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(newQuantity),
+                Message = "New quantity must be greater than zero. To remove an item, use the remove operation.",
+                Type = SaleValidationErrorType.OutOfRange
+            });
+        }
+        else if (newQuantity > 10000)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(newQuantity),
+                Message = "Quantity must not exceed 10,000 units per line item.",
+                Type = SaleValidationErrorType.OutOfRange
+            });
+        }
+
+        var result = new SaleValidationResult
+        {
+            IsValid = errors.Count == 0,
+            Errors = errors,
+            Warnings = warnings
+        };
+
+        if (!result.IsValid)
+        {
+            _logger.LogWarning(
+                "Item quantity update validation failed for sale item {SaleItemId}: {ErrorCount} error(s).",
+                saleItemId, errors.Count);
+        }
+
+        return await Task.FromResult(result);
+    }
+
+    /// <inheritdoc />
+    public async Task<SaleValidationResult> ValidateSaleCompletionAsync(
+        Guid saleId,
+        PaymentMethod paymentMethod,
+        decimal amountPaid)
+    {
+        var errors = new List<SaleValidationError>();
+        var warnings = new List<SaleValidationWarning>();
+
+        // Sale ID: must not be empty
+        if (saleId == Guid.Empty)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(saleId),
+                Message = "Sale ID is required.",
+                Type = SaleValidationErrorType.Required
+            });
+        }
+
+        // Payment method: must be a defined enum value
+        if (!Enum.IsDefined(typeof(PaymentMethod), paymentMethod))
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(paymentMethod),
+                Message = $"Payment method '{paymentMethod}' is not a valid payment method.",
+                Type = SaleValidationErrorType.InvalidFormat
+            });
+        }
+
+        // Amount paid: must be >= 0
+        if (amountPaid < 0)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(amountPaid),
+                Message = "Amount paid must be zero or greater.",
+                Type = SaleValidationErrorType.OutOfRange
+            });
+        }
+
+        // Business rule: amount paid must be > 0 for cash/card payments
+        if (amountPaid == 0 && (paymentMethod == PaymentMethod.Cash || paymentMethod == PaymentMethod.Card))
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(amountPaid),
+                Message = "Amount paid must be greater than zero for cash or card payments.",
+                Type = SaleValidationErrorType.BusinessRule
+            });
+        }
+
+        var result = new SaleValidationResult
+        {
+            IsValid = errors.Count == 0,
+            Errors = errors,
+            Warnings = warnings
+        };
+
+        if (!result.IsValid)
+        {
+            _logger.LogWarning(
+                "Sale completion validation failed for sale {SaleId}: {ErrorCount} error(s). Payment method: {PaymentMethod}, Amount: {AmountPaid}",
+                saleId, errors.Count, paymentMethod, amountPaid);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Sale completion validation passed for sale {SaleId} at {Timestamp}. Payment: {PaymentMethod}, Amount: {AmountPaid}",
+                saleId, DateTime.UtcNow, paymentMethod, amountPaid);
+        }
+
+        return await Task.FromResult(result);
+    }
+
+    /// <inheritdoc />
+    public async Task<SaleValidationResult> ValidateCustomerForSaleAsync(Guid customerId)
+    {
+        var errors = new List<SaleValidationError>();
+        var warnings = new List<SaleValidationWarning>();
+
+        // Customer ID: must not be empty
+        if (customerId == Guid.Empty)
+        {
+            errors.Add(new SaleValidationError
+            {
+                Field = nameof(customerId),
+                Message = "Customer ID is required.",
+                Type = SaleValidationErrorType.Required,
+                RelatedEntityId = customerId
+            });
+        }
+        else
+        {
+            // Check customer exists in repository
+            try
+            {
+                var customer = await _customerRepository.GetByIdAsync(customerId);
+                if (customer == null)
+                {
+                    errors.Add(new SaleValidationError
+                    {
+                        Field = nameof(customerId),
+                        Message = $"Customer with ID '{customerId}' was not found.",
+                        Type = SaleValidationErrorType.CustomerInvalid,
+                        RelatedEntityId = customerId
+                    });
+                }
+                else if (!customer.IsActive)
+                {
+                    errors.Add(new SaleValidationError
+                    {
+                        Field = nameof(customerId),
+                        Message = "The specified customer account is inactive.",
+                        Type = SaleValidationErrorType.CustomerInvalid,
+                        RelatedEntityId = customerId
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error looking up customer {CustomerId} during sale validation", customerId);
+                errors.Add(new SaleValidationError
+                {
+                    Field = nameof(customerId),
+                    Message = "Unable to verify customer information. Please try again.",
+                    Type = SaleValidationErrorType.CustomerInvalid,
+                    RelatedEntityId = customerId
+                });
+            }
+        }
+
+        var result = new SaleValidationResult
+        {
+            IsValid = errors.Count == 0,
+            Errors = errors,
+            Warnings = warnings
+        };
+
+        if (!result.IsValid)
+        {
+            _logger.LogWarning(
+                "Customer validation failed for customer {CustomerId}: {ErrorCount} error(s).",
+                customerId, errors.Count);
+        }
+
+        return result;
+    }
+
+    /// <inheritdoc />
+    public SaleValidationResult AggregateValidationResults(IEnumerable<SaleValidationResult> results)
+    {
+        var resultList = results.ToList();
+
+        var allErrors = resultList.SelectMany(r => r.Errors).ToList();
+        var allWarnings = resultList.SelectMany(r => r.Warnings).ToList();
+        var allItemErrors = new Dictionary<Guid, IEnumerable<string>>();
+
+        foreach (var result in resultList)
+        {
+            foreach (var kvp in result.ItemErrors)
+            {
+                if (allItemErrors.TryGetValue(kvp.Key, out var existing))
+                {
+                    allItemErrors[kvp.Key] = existing.Concat(kvp.Value).Distinct();
+                }
+                else
+                {
+                    allItemErrors[kvp.Key] = kvp.Value;
+                }
+            }
+        }
+
+        var aggregated = new SaleValidationResult
+        {
+            IsValid = allErrors.Count == 0,
+            Errors = allErrors,
+            Warnings = allWarnings,
+            ItemErrors = allItemErrors
+        };
+
+        _logger.LogDebug(
+            "Aggregated {Count} validation results: {ErrorCount} total errors, {WarningCount} total warnings.",
+            resultList.Count, allErrors.Count, allWarnings.Count);
+
+        return aggregated;
+    }
+
+    #endregion
+
     #region Real-Time Validation
 
     public async Task<RealTimeValidationResult> ValidateRealTimeAsync(string fieldName, object? currentValue, ValidationContext context)

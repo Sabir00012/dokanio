@@ -1,6 +1,8 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Shared.Core.Data;
+using Shared.Core.DTOs;
 using Shared.Core.Entities;
 using Shared.Core.Enums;
 using Shared.Core.Repositories;
@@ -58,6 +60,27 @@ public class InMemoryProductRepository : IProductRepository
         return await _context.SaveChangesAsync();
     }
 
+    // ── Transaction support (Requirement 9.3) ─────────────────────────────────
+
+    public Task<IDbContextTransaction> BeginTransactionAsync()
+        => _context.Database.BeginTransactionAsync();
+
+    public async Task<TResult> ExecuteInTransactionAsync<TResult>(Func<Task<TResult>> operation)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try { var r = await operation(); await tx.CommitAsync(); return r; }
+            catch { await tx.RollbackAsync(); throw; }
+        });
+    }
+
+    public async Task ExecuteInTransactionAsync(Func<Task> operation)
+    {
+        await ExecuteInTransactionAsync(async () => { await operation(); return true; });
+    }
+
     public async Task<Product?> GetByBarcodeAsync(string barcode)
     {
         return await _context.Products
@@ -103,6 +126,65 @@ public class InMemoryProductRepository : IProductRepository
     {
         return await _context.Products
             .Where(p => p.ShopId == shopId && p.IsActive)
+            .ToListAsync();
+    }
+
+    public async Task<PagedResult<Product>> SearchProductsPagedAsync(
+        Guid shopId,
+        string? searchTerm = null,
+        int page = 0,
+        int pageSize = 20)
+    {
+        if (page < 0) page = 0;
+        pageSize = Math.Clamp(pageSize, 1, 200);
+
+        var query = _context.Products
+            .Where(p => p.ShopId == shopId && p.IsActive && !p.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var lower = searchTerm.ToLower();
+            query = query.Where(p =>
+                p.Name.ToLower().Contains(lower) ||
+                (p.Barcode != null && p.Barcode.ToLower().Contains(lower)));
+        }
+
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .OrderBy(p => p.Name)
+            .Skip(page * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return PagedResult<Product>.Create(items, totalCount, page, pageSize);
+    }
+
+    // ── Enhanced query methods (Requirement 9.3, 9.4) ─────────────────────────
+
+    public async Task<Product?> GetProductWithStockAsync(Guid productId)
+    {
+        return await _context.Products
+            .Include(p => p.StockEntries)
+            .FirstOrDefaultAsync(p => p.Id == productId && !p.IsDeleted);
+    }
+
+    public async Task<Dictionary<Guid, Product>> GetProductsByIdsAsync(IEnumerable<Guid> productIds)
+    {
+        var ids = productIds?.ToList() ?? new List<Guid>();
+        if (ids.Count == 0) return new Dictionary<Guid, Product>();
+
+        var products = await _context.Products
+            .Where(p => ids.Contains(p.Id) && !p.IsDeleted)
+            .ToListAsync();
+
+        return products.ToDictionary(p => p.Id);
+    }
+
+    public async Task<IEnumerable<Product>> GetWeightBasedProductsAsync(Guid shopId)
+    {
+        return await _context.Products
+            .Where(p => p.ShopId == shopId && p.IsActive && p.IsWeightBased && !p.IsDeleted)
+            .OrderBy(p => p.Name)
             .ToListAsync();
     }
 }

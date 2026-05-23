@@ -63,4 +63,23 @@ public interface IStockRepository : IRepository<Stock>
     /// <param name="shopId">Shop identifier</param>
     /// <returns>Collection of stock entries for the shop</returns>
     Task<IEnumerable<Stock>> GetStockByShopAsync(Guid shopId);
+
+    // ── Enhanced query methods (Requirement 9.3) ──────────────────────────────
+
+    /// <summary>
+    /// Gets stock levels for multiple products in a single batch query.
+    /// More efficient than calling <see cref="GetByProductIdAsync"/> in a loop.
+    /// </summary>
+    /// <param name="productIds">Collection of product identifiers.</param>
+    /// <returns>Dictionary mapping product ID to stock quantity (0 if no stock record exists).</returns>
+    Task<Dictionary<Guid, int>> GetStockQuantitiesBatchAsync(IEnumerable<Guid> productIds);
+
+    /// <summary>
+    /// Atomically decrements stock for multiple products in a single transaction.
+    /// Used during sale completion to reduce inventory for all sold items at once.
+    /// Throws <see cref="InvalidOperationException"/> if any product has insufficient stock.
+    /// </summary>
+    /// <param name="reductions">Dictionary mapping product ID to quantity to reduce.</param>
+    /// <param name="deviceId">Device making the change (for sync tracking).</param>
+    Task DeductStockBatchAsync(Dictionary<Guid, int> reductions, Guid deviceId);
 }

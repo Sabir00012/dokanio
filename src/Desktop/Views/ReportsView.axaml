@@ -125,7 +125,7 @@
                         <DataGridTextColumn Header="Product Name" Binding="{Binding Name}" Width="*"/>
                         <DataGridTextColumn Header="Batch Number" Binding="{Binding BatchNumber}" Width="120"/>
                         <DataGridTextColumn Header="Expiry Date" Binding="{Binding ExpiryDate, StringFormat='dd/MM/yyyy'}" Width="120"/>
-                        <DataGridTextColumn Header="Stock Quantity" Binding="{Binding StockQuantity}" Width="120"/>
+                        <DataGridTextColumn Header="Stock Quantity" Binding="{Binding BatchNumber}" Width="120"/>
                     </DataGrid.Columns>
                 </DataGrid>
                 

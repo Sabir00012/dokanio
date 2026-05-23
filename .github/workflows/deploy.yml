@@ -1,0 +1,86 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy
+    environment:
+      name: ${{ github.event.inputs.environment || 'production' }}
+    
+    permissions:
+      contents: read
+      packages: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set deployment environment
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/tags/"* ]]; then
+            echo "DEPLOY_ENV=production" >> $GITHUB_OUTPUT
+          else
+            echo "DEPLOY_ENV=${{ github.event.inputs.environment || 'staging' }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker images
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-server:${{ github.sha }}
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-webdashboard:${{ github.sha }}
+
+      - name: Deploy to ${{ steps.env.outputs.DEPLOY_ENV }}
+        run: |
+          echo "Deploying to ${{ steps.env.outputs.DEPLOY_ENV }}"
+          # Add your deployment logic here
+          # Examples:
+          # - SSH to server and pull images
+          # - Update Kubernetes manifests
+          # - Trigger deployment pipeline
+          # - Update Docker Compose on remote server
+          
+          # Placeholder for deployment
+          echo "Deployment would occur here"
+          echo "Images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-server:${{ github.sha }}"
+          echo "Images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-webdashboard:${{ github.sha }}"
+
+      - name: Verify deployment
+        run: |
+          echo "Verifying deployment..."
+          # Add health checks and verification logic
+
+      - name: Notify deployment
+        if: success()
+        run: |
+          echo "Deployment to ${{ steps.env.outputs.DEPLOY_ENV }} completed successfully"
+
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "Deployment to ${{ steps.env.outputs.DEPLOY_ENV }} failed"

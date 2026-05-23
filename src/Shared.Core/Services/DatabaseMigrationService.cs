@@ -100,17 +100,41 @@ public class DatabaseMigrationService : IDatabaseMigrationService
             var deviceId = Guid.NewGuid();
             var now = DateTime.UtcNow;
 
-            // 1. First seed businesses with placeholder owner IDs
+            await SeedDataAsync(deviceId, now);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while seeding comprehensive initial data");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Core seeding logic, extracted so FK bypass can wrap it cleanly.
+    /// </summary>
+    private async Task SeedDataAsync(Guid deviceId, DateTime now)
+    {
+        try
+        {
+            // Pre-generate IDs so we can cross-reference before saving.
             var businessIds = new[]
             {
                 Guid.NewGuid(),
                 Guid.NewGuid(),
                 Guid.NewGuid()
             };
-
             var adminUserId = Guid.NewGuid();
 
-            // 2. Seed Businesses with admin as owner (FK constraints disabled)
+            // Seeding order to satisfy FK constraints on PostgreSQL:
+            //
+            //   Business.OwnerId → Users.Id   (nullable now — set after users are created)
+            //   User.BusinessId  → Businesses.Id (required — businesses must exist first)
+            //   Shop.BusinessId  → Businesses.Id (required — businesses must exist first)
+            //   User.ShopId      → Shops.Id    (nullable — shops must exist first)
+            //
+            // Order: Businesses (OwnerId=null) → Shops → Users → UPDATE Businesses.OwnerId
+
+            // 1. Seed Businesses with OwnerId = null (nullable FK, set after users are created)
             var businesses = new List<Business>
             {
                 new Business
@@ -118,7 +142,7 @@ public class DatabaseMigrationService : IDatabaseMigrationService
                     Id = businessIds[0],
                     Name = "TechMart Electronics",
                     Type = BusinessType.GeneralRetail,
-                    OwnerId = adminUserId, // Will be valid once we create the admin user
+                    OwnerId = null,
                     Address = "123 Tech Street, Silicon Valley",
                     Phone = "+1-555-0101",
                     Email = "info@techmart.com",
@@ -133,7 +157,7 @@ public class DatabaseMigrationService : IDatabaseMigrationService
                     Id = businessIds[1],
                     Name = "HealthPlus Pharmacy",
                     Type = BusinessType.Pharmacy,
-                    OwnerId = adminUserId,
+                    OwnerId = null,
                     Address = "456 Health Avenue, Medical District",
                     Phone = "+1-555-0102",
                     Email = "info@healthplus.com",
@@ -148,7 +172,7 @@ public class DatabaseMigrationService : IDatabaseMigrationService
                     Id = businessIds[2],
                     Name = "FreshMart Grocery",
                     Type = BusinessType.Grocery,
-                    OwnerId = adminUserId,
+                    OwnerId = null,
                     Address = "789 Fresh Street, Downtown",
                     Phone = "+1-555-0103",
                     Email = "info@freshmart.com",
@@ -161,12 +185,11 @@ public class DatabaseMigrationService : IDatabaseMigrationService
             };
 
             await _context.Businesses.AddRangeAsync(businesses);
-            await _context.SaveChangesAsync(); // Save businesses first
+            await _context.SaveChangesAsync();
 
-            // 3. Seed Shops for each business
+            // 2. Seed Shops for each business
             var shops = new List<Shop>
             {
-                // TechMart shops
                 new Shop
                 {
                     Id = Guid.NewGuid(),
@@ -191,7 +214,6 @@ public class DatabaseMigrationService : IDatabaseMigrationService
                     DeviceId = deviceId,
                     SyncStatus = SyncStatus.NotSynced
                 },
-                // HealthPlus shops
                 new Shop
                 {
                     Id = Guid.NewGuid(),
@@ -204,7 +226,6 @@ public class DatabaseMigrationService : IDatabaseMigrationService
                     DeviceId = deviceId,
                     SyncStatus = SyncStatus.NotSynced
                 },
-                // FreshMart shops
                 new Shop
                 {
                     Id = Guid.NewGuid(),
@@ -220,10 +241,9 @@ public class DatabaseMigrationService : IDatabaseMigrationService
             };
 
             await _context.Shops.AddRangeAsync(shops);
-            await _context.SaveChangesAsync(); // Save shops before users
+            await _context.SaveChangesAsync();
 
-            // 4. Now seed Users with proper BusinessId and ShopId references
-            // Create users with proper PBKDF2 hashing to match EncryptionService
+            // 3. Seed Users — Businesses and Shops now exist so all FKs resolve
             var adminSalt = _encryptionService.GenerateSalt();
             var managerSalt = _encryptionService.GenerateSalt();
             var cashierSalt = _encryptionService.GenerateSalt();
@@ -232,9 +252,9 @@ public class DatabaseMigrationService : IDatabaseMigrationService
             {
                 new User
                 {
-                    Id = adminUserId, // Use the same ID we used for business owner
-                    BusinessId = businessIds[0], // TechMart
-                    ShopId = shops[0].Id, // TechMart Downtown
+                    Id = adminUserId,
+                    BusinessId = businessIds[0],
+                    ShopId = shops[0].Id,
                     Username = "admin",
                     Email = "admin@pos.local",
                     PasswordHash = _encryptionService.HashPassword("admin123", adminSalt),
@@ -250,8 +270,8 @@ public class DatabaseMigrationService : IDatabaseMigrationService
                 new User
                 {
                     Id = Guid.NewGuid(),
-                    BusinessId = businessIds[0], // TechMart
-                    ShopId = shops[0].Id, // TechMart Downtown
+                    BusinessId = businessIds[0],
+                    ShopId = shops[0].Id,
                     Username = "manager",
                     Email = "manager@pos.local",
                     PasswordHash = _encryptionService.HashPassword("manager123", managerSalt),
@@ -267,8 +287,8 @@ public class DatabaseMigrationService : IDatabaseMigrationService
                 new User
                 {
                     Id = Guid.NewGuid(),
-                    BusinessId = businessIds[0], // TechMart
-                    ShopId = shops[0].Id, // TechMart Downtown
+                    BusinessId = businessIds[0],
+                    ShopId = shops[0].Id,
                     Username = "cashier",
                     Email = "cashier@pos.local",
                     PasswordHash = _encryptionService.HashPassword("cashier123", cashierSalt),
@@ -284,12 +304,19 @@ public class DatabaseMigrationService : IDatabaseMigrationService
             };
 
             await _context.Users.AddRangeAsync(users);
-            await _context.SaveChangesAsync(); // Save users - now the foreign key references are valid
+            await _context.SaveChangesAsync();
 
-            // 6. Seed comprehensive product catalog
+            // 4. Now that the admin user exists, set OwnerId on all businesses
+            foreach (var business in businesses)
+            {
+                business.OwnerId = adminUserId;
+            }
+            _context.Businesses.UpdateRange(businesses);
+            await _context.SaveChangesAsync();
+
+            // 5. Seed comprehensive product catalog
             var products = new List<Product>();
 
-            // Electronics products (assign to first shop)
             var electronicsProducts = new[]
             {
                 new { Name = "iPhone 15 Pro", Barcode = "1001001001001", Price = 999.99m, Cost = 750.00m },
@@ -309,7 +336,7 @@ public class DatabaseMigrationService : IDatabaseMigrationService
                 products.Add(new Product
                 {
                     Id = Guid.NewGuid(),
-                    ShopId = shops[0].Id, // TechMart Downtown
+                    ShopId = shops[0].Id,
                     Name = item.Name,
                     Barcode = item.Barcode,
                     Category = "Electronics",
@@ -643,8 +670,12 @@ public class DatabaseMigrationService : IDatabaseMigrationService
             
             _logger.LogInformation("Database recreated, proceeding with fresh seed data...");
             
-            // Temporarily disable foreign key constraints for seeding
-            await _context.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys = OFF;");
+            // Disable FK constraints only for SQLite (PostgreSQL handles this differently)
+            var isSqlite = _context.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
+            if (isSqlite)
+            {
+                await _context.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys = OFF;");
+            }
             
             try
             {
@@ -653,8 +684,10 @@ public class DatabaseMigrationService : IDatabaseMigrationService
             }
             finally
             {
-                // Re-enable foreign key constraints
-                await _context.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys = ON;");
+                if (isSqlite)
+                {
+                    await _context.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys = ON;");
+                }
             }
             
             _logger.LogInformation("Force re-seed completed successfully");

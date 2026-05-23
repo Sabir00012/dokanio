@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Desktop.ViewModels;
 
@@ -29,5 +30,11 @@ public partial class BaseViewModel : ObservableValidator
     {
         ErrorMessage = string.Empty;
         HasError = false;
+    }
+
+    [RelayCommand]
+    private void ClearErrorDisplay()
+    {
+        ClearError();
     }
 }

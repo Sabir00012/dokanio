@@ -1,6 +1,7 @@
 using Shared.Core.Entities;
 using Shared.Core.Enums;
 using Shared.Core.Repositories;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -17,7 +18,8 @@ public class AuthenticationService : IAuthenticationService
     private readonly IAuthorizationService _authorizationService;
     private readonly IEncryptionService _encryptionService;
     private readonly IAuditService _auditService;
-    private readonly Dictionary<Guid, CachedCredentials> _credentialsCache;
+    // ConcurrentDictionary ensures thread-safe access from multiple async login flows
+    private readonly ConcurrentDictionary<Guid, CachedCredentials> _credentialsCache;
 
     public AuthenticationService(
         IUserRepository userRepository,
@@ -33,7 +35,7 @@ public class AuthenticationService : IAuthenticationService
         _authorizationService = authorizationService;
         _encryptionService = encryptionService;
         _auditService = auditService;
-        _credentialsCache = new Dictionary<Guid, CachedCredentials>();
+        _credentialsCache = new ConcurrentDictionary<Guid, CachedCredentials>();
     }
 
     public async Task<AuthenticationResult> AuthenticateAsync(LoginRequest request)
@@ -344,7 +346,7 @@ public class AuthenticationService : IAuthenticationService
         if (DateTime.UtcNow > cachedCredentials.ExpiresAt)
         {
             // Remove expired credentials
-            _credentialsCache.Remove(userId);
+            _credentialsCache.TryRemove(userId, out _);
             
             await _auditService.LogAsync(
                 userId,
@@ -359,7 +361,7 @@ public class AuthenticationService : IAuthenticationService
 
     public async Task ClearCachedCredentialsAsync(Guid userId)
     {
-        if (_credentialsCache.Remove(userId))
+        if (_credentialsCache.TryRemove(userId, out _))
         {
             await _auditService.LogAsync(
                 userId,
