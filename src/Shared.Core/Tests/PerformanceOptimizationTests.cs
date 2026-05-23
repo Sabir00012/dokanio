@@ -103,7 +103,7 @@ public class PerformanceOptimizationTests : IDisposable
 
         // Act & Assert - Test optimized business query
         var stopwatch = Stopwatch.StartNew();
-        var businesses = await _queryOptimizationService.GetBusinessesOptimizedAsync(testData.Business.OwnerId);
+        var businesses = await _queryOptimizationService.GetBusinessesOptimizedAsync(testData.Business.OwnerId ?? Guid.Empty);
         stopwatch.Stop();
 
         Assert.NotEmpty(businesses);
@@ -364,7 +364,7 @@ public class PerformanceOptimizationTests : IDisposable
         // Act - Test various operations with performance targets for low-end devices
         var operations = new List<(string Name, Func<Task> Operation, int MaxDurationMs)>
         {
-            ("Business Query", async () => await _queryOptimizationService.GetBusinessesOptimizedAsync(testData.Business.OwnerId), 200),
+            ("Business Query", async () => await _queryOptimizationService.GetBusinessesOptimizedAsync(testData.Business.OwnerId ?? Guid.Empty), 200),
             ("Shop Query", async () => await _queryOptimizationService.GetShopsOptimizedAsync(testData.Business.Id), 150),
             ("Product Query", async () => await _queryOptimizationService.GetProductsOptimizedAsync(testData.Shop.Id), 150),
             ("Cache Operation", async () => await _cachingService.SetMemoryCacheAsync("test", testData.Business), 50),

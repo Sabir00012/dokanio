@@ -17,8 +17,9 @@ public class Business : ISoftDeletable
     [Required]
     public BusinessType Type { get; set; }
     
-    [Required]
-    public Guid OwnerId { get; set; }
+    // Nullable so a business can be seeded before its owner user exists.
+    // The owner is always set in practice; nullable only breaks the circular FK dependency.
+    public Guid? OwnerId { get; set; }
     
     [MaxLength(500)]
     public string? Description { get; set; }
@@ -57,7 +58,7 @@ public class Business : ISoftDeletable
     public DateTime? DeletedAt { get; set; }
     
     // Navigation properties
-    public virtual User Owner { get; set; } = null!;
+    public virtual User? Owner { get; set; }
     public virtual ICollection<Shop> Shops { get; set; } = new List<Shop>();
     public virtual ICollection<User> Users { get; set; } = new List<User>();
 }

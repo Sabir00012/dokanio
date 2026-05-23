@@ -38,7 +38,7 @@ services:
       - pos-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_secure_password}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -57,10 +57,10 @@ services:
       - ASPNETCORE_URLS=http://+:80
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=pos_multi_business;Username=pos_user;Password=${POSTGRES_PASSWORD:-pos_secure_password};
       - ConnectionStrings__Redis=redis:6379,password=${REDIS_PASSWORD:-redis_secure_password}
-      - JWT__SecretKey=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - JWT__Secret=${JWT_SECRET_KEY:-your-super-secret-jwt-key-change-in-production-min-32-chars}
       - JWT__Issuer=OfflineFirstPOS
       - JWT__Audience=OfflineFirstPOS
-      - JWT__ExpirationMinutes=1440
+      - JWT__ExpirationHours=24
       - Monitoring__ApplicationInsights__ConnectionString=${APPINSIGHTS_CONNECTION_STRING}
       - Logging__LogLevel__Default=Information
       - Logging__LogLevel__Microsoft=Warning
@@ -75,7 +75,7 @@ services:
       - pos-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -106,7 +106,7 @@ services:
       - pos-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

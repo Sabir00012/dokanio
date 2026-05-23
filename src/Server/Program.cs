@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Server.Data;
 using Server.Services;
+using Shared.Core.Data;
 using Shared.Core.DependencyInjection;
 using Shared.Core.Services;
 using System.Text;
@@ -31,7 +32,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Configure PostgreSQL database
+// Configure PostgreSQL database for ServerDbContext
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
     ?? "Host=localhost;Database=pos_server;Username=postgres;Password=postgres";
 
@@ -46,10 +47,13 @@ builder.Services.AddDbContext<ServerDbContext>(options =>
     options.EnableDetailedErrors(builder.Environment.IsDevelopment());
 });
 
-// Add shared core services for server
-var sqliteConnectionString = builder.Configuration.GetConnectionString("SqliteConnection") 
-    ?? "Data Source=server_pos.db";
-builder.Services.AddSharedCore(sqliteConnectionString);
+// Add shared core services (repositories, business services, etc.)
+// AddSharedCore also registers PosDbContext with SQLite — we override it below to use PostgreSQL via ServerDbContext
+builder.Services.AddSharedCore(connectionString);
+
+// Override PosDbContext to resolve as ServerDbContext so all shared services use PostgreSQL
+// This must come AFTER AddSharedCore to take precedence
+builder.Services.AddScoped<PosDbContext>(sp => sp.GetRequiredService<ServerDbContext>());
 
 // Configure JWT authentication
 var jwtSecret = builder.Configuration["Jwt:Secret"] 
@@ -125,7 +129,30 @@ builder.Services.AddLogging(logging =>
 
 var app = builder.Build();
 
-// Initialize the server application
+// Ensure database is created and seeded FIRST, before any service initialization
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ServerDbContext>();
+    var migrationService = scope.ServiceProvider.GetRequiredService<IDatabaseMigrationService>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    
+    try
+    {
+        await context.Database.EnsureCreatedAsync();
+        logger.LogInformation("Server database schema initialized successfully");
+
+        // Seed initial data (admin/manager/cashier users + sample data) if the DB is empty
+        await migrationService.SeedInitialDataAsync();
+        logger.LogInformation("Server database seeding completed");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error initializing server database");
+        throw;
+    }
+}
+
+// Initialize the server application (runs after DB is ready)
 try
 {
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
@@ -149,24 +176,6 @@ catch (Exception ex)
 {
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
     logger.LogError(ex, "Error during server initialization");
-}
-
-// Ensure database is created and migrated
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<ServerDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    
-    try
-    {
-        await context.Database.EnsureCreatedAsync();
-        logger.LogInformation("Server database initialized successfully");
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error initializing server database");
-        throw;
-    }
 }
 
 // Configure the HTTP request pipeline.
@@ -197,7 +206,13 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseHttpsRedirection();
+// Only redirect to HTTPS in development (local with HTTPS cert).
+// In production the container runs on HTTP behind a reverse proxy / load balancer,
+// so HTTPS redirection would cause an infinite redirect loop on port 80.
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // Custom authentication and authorization middleware
 // app.UseMiddleware<Server.Middleware.AuthenticationMiddleware>();

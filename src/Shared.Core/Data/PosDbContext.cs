@@ -138,10 +138,11 @@ public class PosDbContext : DbContext
             entity.Property(e => e.Type).HasConversion<int>();
             entity.Property(e => e.SyncStatus).HasConversion<int>();
             
-            // Foreign key relationship with Owner
+            // Foreign key relationship with Owner (nullable to allow seeding order flexibility)
             entity.HasOne(e => e.Owner)
                   .WithMany(u => u.OwnedBusinesses)
                   .HasForeignKey(e => e.OwnerId)
+                  .IsRequired(false)
                   .OnDelete(DeleteBehavior.Restrict);
         });
 

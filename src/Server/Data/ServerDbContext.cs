@@ -58,9 +58,10 @@ public class ServerDbContext : PosDbContext
             entity.Property(e => e.LastSyncVersion).HasMaxLength(50);
         });
 
-        // AuditLog configuration
+        // AuditLog configuration - use a separate table name to avoid conflict with Shared.Core's AuditLogs
         modelBuilder.Entity<Server.Models.AuditLog>(entity =>
         {
+            entity.ToTable("ServerAuditLogs");
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.Operation);
             entity.HasIndex(e => e.EntityType);
@@ -88,16 +89,45 @@ public class ServerDbContext : PosDbContext
             entity.Property(e => e.UnitPrice).HasPrecision(18, 2);
             entity.Property(e => e.PurchasePrice).HasPrecision(18, 2);
             entity.Property(e => e.SellingPrice).HasPrecision(18, 2);
+
+            // Fix SQLite-specific filter (PascalCase) → PostgreSQL (quoted PascalCase)
+            entity.HasIndex(e => new { e.ExpiryDate, e.ShopId })
+                  .HasDatabaseName("IX_Product_Expiry_Shop")
+                  .HasFilter("\"ExpiryDate\" IS NOT NULL");
         });
 
         modelBuilder.Entity<Sale>(entity =>
         {
             entity.Property(e => e.TotalAmount).HasPrecision(18, 2);
+
+            entity.HasIndex(e => new { e.CustomerId, e.CreatedAt })
+                  .HasDatabaseName("IX_Sale_Customer_Created")
+                  .HasFilter("\"CustomerId\" IS NOT NULL");
         });
 
         modelBuilder.Entity<SaleItem>(entity =>
         {
             entity.Property(e => e.UnitPrice).HasPrecision(18, 2);
+
+            entity.HasIndex(e => e.BatchNumber)
+                  .HasDatabaseName("IX_SaleItem_BatchNumber")
+                  .HasFilter("\"BatchNumber\" IS NOT NULL");
+        });
+
+        // Fix SQLite-specific index filters that use PascalCase column names.
+        // PostgreSQL requires quoted PascalCase column names in filter expressions.
+        modelBuilder.Entity<CustomerMembership>(entity =>
+        {
+            entity.HasIndex(e => new { e.ExpiryDate, e.IsActive })
+                  .HasDatabaseName("IX_CustomerMembership_Expiry_Active")
+                  .HasFilter("\"ExpiryDate\" IS NOT NULL");
+        });
+
+        modelBuilder.Entity<SaleDiscount>(entity =>
+        {
+            entity.HasIndex(e => e.DiscountId)
+                  .HasDatabaseName("IX_SaleDiscount_DiscountId")
+                  .HasFilter("\"DiscountId\" IS NOT NULL");
         });
     }
 
